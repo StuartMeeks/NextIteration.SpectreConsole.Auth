@@ -1,3 +1,4 @@
 <Solution>
   <Project Path="src/NextIteration.SpectreConsole.Auth/NextIteration.SpectreConsole.Auth.csproj" />
+  <Project Path="tests/NextIteration.SpectreConsole.Auth.Tests/NextIteration.SpectreConsole.Auth.Tests.csproj" />
 </Solution>
