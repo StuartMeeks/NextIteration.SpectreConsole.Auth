@@ -77,13 +77,13 @@ namespace NextIteration.SpectreConsole.Auth.Commands
             }
             catch (Exception ex)
             {
-                AnsiConsole.MarkupLine($"[red]Error selecting credential: {ex.Message}[/]");
+                CommandErrorReporter.Report(ex, "Error selecting credential", settings.Verbose);
                 return 1;
             }
         }
 
         /// <summary>CLI settings for <c>accounts select</c>.</summary>
-        public sealed class Settings : CommandSettings
+        public sealed class Settings : AccountsCommandSettings
         {
             /// <summary>
             /// ID of the credential to activate. If omitted, the user is

@@ -36,10 +36,7 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
             string credentialsDirectory,
             IEnumerable<ICredentialSummaryProvider>? summaryProviders = null)
         {
-            if (string.IsNullOrWhiteSpace(credentialsDirectory))
-            {
-                throw new ArgumentException("Credentials directory must be provided.", nameof(credentialsDirectory));
-            }
+            ArgumentException.ThrowIfNullOrWhiteSpace(credentialsDirectory);
 
             _encryption = encryption;
             _credentialsDirectory = credentialsDirectory;
@@ -283,10 +280,7 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
         /// </summary>
         private static void ValidateProviderName(string providerName)
         {
-            if (string.IsNullOrWhiteSpace(providerName))
-            {
-                throw new ArgumentException("Provider name must be non-empty.", nameof(providerName));
-            }
+            ArgumentException.ThrowIfNullOrWhiteSpace(providerName);
 
             foreach (var c in providerName)
             {

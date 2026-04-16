@@ -21,7 +21,7 @@ namespace NextIteration.SpectreConsole.Auth.Commands
         private const string _iconCross = "\u2717"; // ✗
 
         /// <summary>CLI settings for <c>accounts list</c>.</summary>
-        public sealed class Settings : CommandSettings
+        public sealed class Settings : AccountsCommandSettings
         {
             /// <summary>
             /// Restricts the output to a single provider. When omitted, a
@@ -62,7 +62,7 @@ namespace NextIteration.SpectreConsole.Auth.Commands
             }
             catch (Exception ex)
             {
-                AnsiConsole.MarkupLine($"[red]Error listing credentials: {ex.Message}[/]");
+                CommandErrorReporter.Report(ex, "Error listing credentials", settings.Verbose);
                 return 1;
             }
         }

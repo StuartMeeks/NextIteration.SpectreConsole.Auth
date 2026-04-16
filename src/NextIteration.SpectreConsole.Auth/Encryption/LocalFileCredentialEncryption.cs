@@ -64,8 +64,7 @@ namespace NextIteration.SpectreConsole.Auth.Encryption
         /// </exception>
         public LocalFileCredentialEncryption(string credentialsDirectory)
         {
-            if (string.IsNullOrWhiteSpace(credentialsDirectory))
-                throw new ArgumentException("Credentials directory must be provided.", nameof(credentialsDirectory));
+            ArgumentException.ThrowIfNullOrWhiteSpace(credentialsDirectory);
 
             _keyFile = Path.Combine(credentialsDirectory, ".keystore");
 

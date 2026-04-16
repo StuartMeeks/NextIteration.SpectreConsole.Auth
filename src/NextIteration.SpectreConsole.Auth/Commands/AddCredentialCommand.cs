@@ -23,7 +23,7 @@ namespace NextIteration.SpectreConsole.Auth.Commands
                 StringComparer.OrdinalIgnoreCase);
 
         /// <summary>CLI settings for <c>accounts add</c>.</summary>
-        public sealed class Settings : CommandSettings
+        public sealed class Settings : AccountsCommandSettings
         {
             /// <summary>
             /// Provider to add a credential for. If omitted, the user is
@@ -97,7 +97,7 @@ namespace NextIteration.SpectreConsole.Auth.Commands
             }
             catch (Exception ex)
             {
-                AnsiConsole.MarkupLine($"[red]Error adding credential: {ex.Message}[/]");
+                CommandErrorReporter.Report(ex, "Error adding credential", settings.Verbose);
                 return 1;
             }
         }

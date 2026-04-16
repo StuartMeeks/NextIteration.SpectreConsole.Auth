@@ -84,13 +84,13 @@ namespace NextIteration.SpectreConsole.Auth.Commands
             }
             catch (Exception ex)
             {
-                AnsiConsole.MarkupLine($"[red]Error deleting credential: {ex.Message}[/]");
+                CommandErrorReporter.Report(ex, "Error deleting credential", settings.Verbose);
                 return 1;
             }
         }
 
         /// <summary>CLI settings for <c>accounts delete</c>.</summary>
-        public sealed class Settings : CommandSettings
+        public sealed class Settings : AccountsCommandSettings
         {
             /// <summary>
             /// ID of the credential to delete. If omitted, the user is
