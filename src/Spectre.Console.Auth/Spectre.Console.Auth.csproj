@@ -10,7 +10,7 @@
 
 	<PropertyGroup>
 		<PackageId>Spectre.Console.Auth</PackageId>
-		<Version>0.1.1</Version>
+		<Version>0.1.2</Version>
 		<Authors>Stuart Meeks</Authors>
 		<Description>Credential storage, encryption, and Spectre.Console CLI commands for managing provider credentials in CLI tools.</Description>
 		<GeneratePackageOnBuild>true</GeneratePackageOnBuild>
