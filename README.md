@@ -1,1 +1,1 @@
-# Spectre.Console.Auth
+# Next.SpectreConsole.Auth

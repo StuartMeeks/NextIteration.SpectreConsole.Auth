@@ -1,7 +1,7 @@
-using Spectre.Console.Auth.Credentials;
-using Spectre.Console.Auth.Tokens;
+using Next.SpectreConsole.Auth.Credentials;
+using Next.SpectreConsole.Auth.Tokens;
 
-namespace Spectre.Console.Auth.Services
+namespace Next.SpectreConsole.Auth.Services
 {
     /// <summary>
     /// Provider-specific authentication service that exchanges a credential

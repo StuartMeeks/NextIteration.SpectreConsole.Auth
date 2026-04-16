@@ -6,4 +6,15 @@
     <Authors>Stuart Meeks</Authors>
     <Company>Next Iteration</Company>
   </PropertyGroup>
+
+  <PropertyGroup>
+    <!--
+      CA1716 flags the top-level namespace segment 'Next' because it is a
+      reserved keyword in Visual Basic (used in 'For...Next' loops). VB.NET
+      consumers would need to escape it as [Next] when importing. We accept
+      that trade-off: Spectre.Console's audience is overwhelmingly C# CLI
+      tooling, and the chosen prefix carries the 'Next Iteration' brand.
+    -->
+    <NoWarn>$(NoWarn);CA1716</NoWarn>
+  </PropertyGroup>
 </Project>

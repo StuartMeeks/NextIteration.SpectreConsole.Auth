@@ -1,4 +1,4 @@
-namespace Spectre.Console.Auth.Tokens
+namespace Next.SpectreConsole.Auth.Tokens
 {
     /// <summary>
     /// A token produced by authenticating with a credential. Exposes only

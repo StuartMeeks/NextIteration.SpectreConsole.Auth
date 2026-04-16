@@ -10,7 +10,7 @@
 	</PropertyGroup>
 
 	<PropertyGroup>
-		<PackageId>Spectre.Console.Auth</PackageId>
+		<PackageId>Next.SpectreConsole.Auth</PackageId>
 		<Version>0.1.0</Version>
 		<Authors>Stuart Meeks</Authors>
 		<Description>Credential storage, encryption, and Spectre.Console CLI commands for managing provider credentials in CLI tools.</Description>
@@ -19,8 +19,8 @@
 		<IncludeBuildOutput>true</IncludeBuildOutput>
 		<PackageLicenseExpression>MIT</PackageLicenseExpression>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
-		<PackageProjectUrl>https://github.com/StuartMeeks/Spectre.Console.Auth</PackageProjectUrl>
-		<RepositoryUrl>https://github.com/StuartMeeks/Spectre.Console.Auth.git</RepositoryUrl>
+		<PackageProjectUrl>https://github.com/StuartMeeks/Next.SpectreConsole.Auth</PackageProjectUrl>
+		<RepositoryUrl>https://github.com/StuartMeeks/Next.SpectreConsole.Auth.git</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
 		<PackageTags>spectre;cli;authentication;credentials;encryption</PackageTags>
 		<PackageIcon>icon.png</PackageIcon>

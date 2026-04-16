@@ -1,6 +1,6 @@
-using Spectre.Console.Auth.Commands;
+using Next.SpectreConsole.Auth.Commands;
 
-namespace Spectre.Console.Auth.Persistence
+namespace Next.SpectreConsole.Auth.Persistence
 {
     /// <summary>
     /// Storage interface for encrypted credentials. The default

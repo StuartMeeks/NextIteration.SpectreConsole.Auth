@@ -1,7 +1,7 @@
-using Spectre.Console.Auth.Commands;
+using Next.SpectreConsole.Auth.Commands;
 using Spectre.Console.Cli;
 
-namespace Spectre.Console.Auth
+namespace Next.SpectreConsole.Auth
 {
     /// <summary>
     /// Spectre.Console.Cli configurator extensions for registering the

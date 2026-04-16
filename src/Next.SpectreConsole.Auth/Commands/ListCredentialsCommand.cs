@@ -1,9 +1,10 @@
+using Spectre.Console;
 using System.ComponentModel;
 
-using Spectre.Console.Auth.Persistence;
+using Next.SpectreConsole.Auth.Persistence;
 using Spectre.Console.Cli;
 
-namespace Spectre.Console.Auth.Commands
+namespace Next.SpectreConsole.Auth.Commands
 {
     /// <summary>
     /// Spectre.Console command for the <c>accounts list</c> branch. Renders

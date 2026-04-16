@@ -1,4 +1,4 @@
-namespace Spectre.Console.Auth.Commands
+namespace Next.SpectreConsole.Auth.Commands
 {
     /// <summary>
     /// Projects a decrypted credential into an ordered list of human-readable

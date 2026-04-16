@@ -2,7 +2,7 @@ using System.Runtime.Versioning;
 using System.Security.AccessControl;
 using System.Security.Principal;
 
-namespace Spectre.Console.Auth.Persistence
+namespace Next.SpectreConsole.Auth.Persistence
 {
     /// <summary>
     /// Creates the credentials directory with hardened filesystem permissions.
