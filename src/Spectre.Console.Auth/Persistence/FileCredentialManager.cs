@@ -1,5 +1,7 @@
-using Spectre.Console.Auth.Encryption;
 using System.Text.Json;
+
+using Spectre.Console.Auth.Commands;
+using Spectre.Console.Auth.Encryption;
 
 namespace Spectre.Console.Auth.Persistence
 {
@@ -10,7 +12,7 @@ namespace Spectre.Console.Auth.Persistence
     /// </summary>
     public class FileCredentialManager : ICredentialManager
     {
-        private static readonly JsonSerializerOptions JsonOptions = new()
+        private static readonly JsonSerializerOptions _jsonOptions = new()
         {
             WriteIndented = true,
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
@@ -19,7 +21,7 @@ namespace Spectre.Console.Auth.Persistence
         private readonly string _credentialsDirectory;
         private readonly string _selectionFile;
         private readonly ICredentialEncryption _encryption;
-        private readonly IReadOnlyDictionary<string, ICredentialSummaryProvider> _summaryProviders;
+        private readonly Dictionary<string, ICredentialSummaryProvider> _summaryProviders;
 
         /// <summary>
         /// Constructs the manager over <paramref name="credentialsDirectory"/>.
@@ -35,7 +37,9 @@ namespace Spectre.Console.Auth.Persistence
             IEnumerable<ICredentialSummaryProvider>? summaryProviders = null)
         {
             if (string.IsNullOrWhiteSpace(credentialsDirectory))
+            {
                 throw new ArgumentException("Credentials directory must be provided.", nameof(credentialsDirectory));
+            }
 
             _encryption = encryption;
             _credentialsDirectory = credentialsDirectory;
@@ -59,14 +63,14 @@ namespace Spectre.Console.Auth.Persistence
 
             var credentials = new List<CredentialSummary>();
             var selections = await LoadSelectionsAsync().ConfigureAwait(false);
-            _summaryProviders.TryGetValue(providerName, out var summaryProvider);
+            _ = _summaryProviders.TryGetValue(providerName, out var summaryProvider);
 
             foreach (var file in credentialFiles)
             {
                 try
                 {
                     var content = await File.ReadAllTextAsync(file).ConfigureAwait(false);
-                    var credential = JsonSerializer.Deserialize<StoredCredential>(content, JsonOptions);
+                    var credential = JsonSerializer.Deserialize<StoredCredential>(content, _jsonOptions);
 
                     // Defensive re-check: the glob should only match this
                     // provider's files, but if a stray file sneaks in we want
@@ -127,7 +131,7 @@ namespace Spectre.Console.Auth.Persistence
             var fileName = $"{providerName.ToLowerInvariant()}_{accountId}.json";
             var filePath = Path.Combine(_credentialsDirectory, fileName);
 
-            var json = JsonSerializer.Serialize(credential, JsonOptions);
+            var json = JsonSerializer.Serialize(credential, _jsonOptions);
 
             // Atomic write: a partial file is never observable even if we
             // crash mid-write. On Unix we also force 0600; on Windows the
@@ -144,7 +148,10 @@ namespace Spectre.Console.Auth.Persistence
         public async Task<bool> DeleteCredentialAsync(string accountId)
         {
             var found = await FindCredentialByAccountIdAsync(accountId).ConfigureAwait(false);
-            if (found is null) return false;
+            if (found is null)
+            {
+                return false;
+            }
 
             var (filePath, credential) = found.Value;
             File.Delete(filePath);
@@ -154,7 +161,7 @@ namespace Spectre.Console.Auth.Persistence
             if (selections.TryGetValue(credential.ProviderName, out var selectedId) &&
                 selectedId.Equals(accountId, StringComparison.OrdinalIgnoreCase))
             {
-                selections.Remove(credential.ProviderName);
+                _ = selections.Remove(credential.ProviderName);
                 await SaveSelectionsAsync(selections).ConfigureAwait(false);
             }
 
@@ -165,7 +172,10 @@ namespace Spectre.Console.Auth.Persistence
         public async Task<bool> SelectCredentialAsync(string accountId)
         {
             var found = await FindCredentialByAccountIdAsync(accountId).ConfigureAwait(false);
-            if (found is null) return false;
+            if (found is null)
+            {
+                return false;
+            }
 
             var credential = found.Value.Credential;
             var selections = await LoadSelectionsAsync().ConfigureAwait(false);
@@ -181,30 +191,31 @@ namespace Spectre.Console.Auth.Persistence
 
             var selections = await LoadSelectionsAsync().ConfigureAwait(false);
             if (!selections.TryGetValue(providerName, out var selectedId))
+            {
                 return null;
+            }
 
             // Filename is deterministic given provider + accountId, so we can
             // read the one file directly rather than scanning the directory.
             var fileName = $"{providerName.ToLowerInvariant()}_{selectedId}.json";
             var filePath = Path.Combine(_credentialsDirectory, fileName);
             if (!File.Exists(filePath))
+            {
                 return null;
+            }
 
             StoredCredential? credential;
             try
             {
                 var content = await File.ReadAllTextAsync(filePath).ConfigureAwait(false);
-                credential = JsonSerializer.Deserialize<StoredCredential>(content, JsonOptions);
+                credential = JsonSerializer.Deserialize<StoredCredential>(content, _jsonOptions);
             }
             catch (JsonException)
             {
                 return null;
             }
 
-            if (credential is null)
-                return null;
-
-            return await _encryption.DecryptAsync(credential.CredentialData).ConfigureAwait(false);
+            return credential is null ? null : await _encryption.DecryptAsync(credential.CredentialData).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -220,7 +231,7 @@ namespace Spectre.Console.Auth.Persistence
                 try
                 {
                     var content = await File.ReadAllTextAsync(file).ConfigureAwait(false);
-                    var credential = JsonSerializer.Deserialize<StoredCredential>(content, JsonOptions);
+                    var credential = JsonSerializer.Deserialize<StoredCredential>(content, _jsonOptions);
                     if (credential is not null &&
                         credential.AccountId.Equals(accountId, StringComparison.OrdinalIgnoreCase))
                     {
@@ -249,11 +260,11 @@ namespace Spectre.Console.Auth.Persistence
                 try
                 {
                     var content = await File.ReadAllTextAsync(file).ConfigureAwait(false);
-                    var credential = JsonSerializer.Deserialize<StoredCredential>(content, JsonOptions);
+                    var credential = JsonSerializer.Deserialize<StoredCredential>(content, _jsonOptions);
 
                     if (!string.IsNullOrWhiteSpace(credential?.ProviderName))
                     {
-                        providers.Add(credential.ProviderName);
+                        _ = providers.Add(credential.ProviderName);
                     }
                 }
                 catch (JsonException)
@@ -273,7 +284,9 @@ namespace Spectre.Console.Auth.Persistence
         private static void ValidateProviderName(string providerName)
         {
             if (string.IsNullOrWhiteSpace(providerName))
+            {
                 throw new ArgumentException("Provider name must be non-empty.", nameof(providerName));
+            }
 
             foreach (var c in providerName)
             {
@@ -286,20 +299,19 @@ namespace Spectre.Console.Auth.Persistence
             }
         }
 
-        private void EnsureDirectoryExists()
-        {
-            CredentialsDirectory.Ensure(_credentialsDirectory);
-        }
+        private void EnsureDirectoryExists() => CredentialsDirectory.Ensure(_credentialsDirectory);
 
         private async Task<Dictionary<string, string>> LoadSelectionsAsync()
         {
             if (!File.Exists(_selectionFile))
+            {
                 return [];
+            }
 
             try
             {
                 var content = await File.ReadAllTextAsync(_selectionFile).ConfigureAwait(false);
-                return JsonSerializer.Deserialize<Dictionary<string, string>>(content, JsonOptions) ??
+                return JsonSerializer.Deserialize<Dictionary<string, string>>(content, _jsonOptions) ??
                        [];
             }
             catch (JsonException)
@@ -310,7 +322,7 @@ namespace Spectre.Console.Auth.Persistence
 
         private async Task SaveSelectionsAsync(Dictionary<string, string> selections)
         {
-            var json = JsonSerializer.Serialize(selections, JsonOptions);
+            var json = JsonSerializer.Serialize(selections, _jsonOptions);
 
             // Atomic write: selections.json is read-modify-written, and a
             // half-written file would be read as empty on next load and

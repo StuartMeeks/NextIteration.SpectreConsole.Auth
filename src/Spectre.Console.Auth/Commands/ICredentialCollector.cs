@@ -1,4 +1,4 @@
-namespace Spectre.Console.Auth
+namespace Spectre.Console.Auth.Commands
 {
     /// <summary>
     /// Provider-specific contributor that knows how to prompt the user for the data

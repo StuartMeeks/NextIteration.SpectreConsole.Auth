@@ -6,11 +6,12 @@
 		<Nullable>enable</Nullable>
 		<SatelliteResourceLanguages>en</SatelliteResourceLanguages>
 		<GenerateDocumentationFile>true</GenerateDocumentationFile>
+		<AnalysisLevel>latest</AnalysisLevel>
 	</PropertyGroup>
 
 	<PropertyGroup>
 		<PackageId>Spectre.Console.Auth</PackageId>
-		<Version>0.1.2</Version>
+		<Version>0.1.0</Version>
 		<Authors>Stuart Meeks</Authors>
 		<Description>Credential storage, encryption, and Spectre.Console CLI commands for managing provider credentials in CLI tools.</Description>
 		<GeneratePackageOnBuild>true</GeneratePackageOnBuild>

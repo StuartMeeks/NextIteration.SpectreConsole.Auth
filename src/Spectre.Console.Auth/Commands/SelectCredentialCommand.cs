@@ -1,6 +1,7 @@
+using System.ComponentModel;
+
 using Spectre.Console.Auth.Persistence;
 using Spectre.Console.Cli;
-using System.ComponentModel;
 
 namespace Spectre.Console.Auth.Commands
 {
@@ -10,15 +11,10 @@ namespace Spectre.Console.Auth.Commands
     /// to <c>IAuthenticationService.AuthenticateAsync()</c> will use this
     /// credential.
     /// </summary>
-    public sealed class SelectCredentialCommand : AsyncCommand<SelectCredentialCommand.Settings>
+    /// <remarks>DI constructor.</remarks>
+    public sealed class SelectCredentialCommand(ICredentialManager credentialManager) : AsyncCommand<SelectCredentialCommand.Settings>
     {
-        private readonly ICredentialManager _credentialManager;
-
-        /// <summary>DI constructor.</summary>
-        public SelectCredentialCommand(ICredentialManager credentialManager)
-        {
-            _credentialManager = credentialManager;
-        }
+        private readonly ICredentialManager _credentialManager = credentialManager;
 
         /// <inheritdoc />
         public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
@@ -48,7 +44,7 @@ namespace Spectre.Console.Auth.Commands
                         allCredentials.AddRange(credentials);
                     }
 
-                    if (!allCredentials.Any())
+                    if (allCredentials.Count == 0)
                     {
                         AnsiConsole.MarkupLine("[yellow]No credentials found.[/]");
                         return 0;
@@ -57,10 +53,9 @@ namespace Spectre.Console.Auth.Commands
                     var choices = allCredentials.Select(c =>
                         $"{c.AccountName} ({c.ProviderName} - {c.AccountId[..8]}... {(c.IsSelected ? "[green](selected)[/]" : "")}").ToArray();
 
-                    var selectedChoice = await AnsiConsole.PromptAsync(
-                        new SelectionPrompt<string>()
+                    var selectedChoice = await AnsiConsole.PromptAsync(new SelectionPrompt<string>()
                             .Title("Select credential to [green]activate[/]:")
-                            .AddChoices(choices)).ConfigureAwait(false);
+                            .AddChoices(choices), cancellationToken).ConfigureAwait(false);
 
                     var selectedIndex = Array.IndexOf(choices, selectedChoice);
                     accountId = allCredentials[selectedIndex].AccountId;

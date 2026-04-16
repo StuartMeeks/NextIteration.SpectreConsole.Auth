@@ -1,4 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
+
+using Spectre.Console.Auth.Commands;
 using Spectre.Console.Auth.Encryption;
 using Spectre.Console.Auth.Persistence;
 

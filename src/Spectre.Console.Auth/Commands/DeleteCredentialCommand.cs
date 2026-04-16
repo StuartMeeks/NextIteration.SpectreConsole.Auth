@@ -1,6 +1,7 @@
+using System.ComponentModel;
+
 using Spectre.Console.Auth.Persistence;
 using Spectre.Console.Cli;
-using System.ComponentModel;
 
 namespace Spectre.Console.Auth.Commands
 {
@@ -9,15 +10,10 @@ namespace Spectre.Console.Auth.Commands
     /// Permanently removes a credential and clears any selection that
     /// pointed to it.
     /// </summary>
-    public sealed class DeleteCredentialCommand : AsyncCommand<DeleteCredentialCommand.Settings>
+    /// <remarks>DI constructor.</remarks>
+    public sealed class DeleteCredentialCommand(ICredentialManager credentialManager) : AsyncCommand<DeleteCredentialCommand.Settings>
     {
-        private readonly ICredentialManager _credentialManager;
-
-        /// <summary>DI constructor.</summary>
-        public DeleteCredentialCommand(ICredentialManager credentialManager)
-        {
-            _credentialManager = credentialManager;
-        }
+        private readonly ICredentialManager _credentialManager = credentialManager;
 
         /// <inheritdoc />
         public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
@@ -47,7 +43,7 @@ namespace Spectre.Console.Auth.Commands
                         allCredentials.AddRange(credentials);
                     }
 
-                    if (!allCredentials.Any())
+                    if (allCredentials.Count == 0)
                     {
                         AnsiConsole.MarkupLine("[yellow]No credentials found.[/]");
                         return 0;
@@ -59,14 +55,14 @@ namespace Spectre.Console.Auth.Commands
                     var selectedChoice = await AnsiConsole.PromptAsync(
                         new SelectionPrompt<string>()
                             .Title("Select credential to [red]delete[/]:")
-                            .AddChoices(choices)).ConfigureAwait(false);
+                            .AddChoices(choices), cancellationToken).ConfigureAwait(false);
 
                     var selectedIndex = Array.IndexOf(choices, selectedChoice);
                     accountId = allCredentials[selectedIndex].AccountId;
                 }
 
                 // Confirm deletion
-                if (!settings.Force && !await AnsiConsole.ConfirmAsync($"Are you sure you want to delete credential '{accountId[..8]}...'?").ConfigureAwait(false))
+                if (!settings.Force && !await AnsiConsole.ConfirmAsync($"Are you sure you want to delete credential '{accountId[..8]}...'?", cancellationToken: cancellationToken).ConfigureAwait(false))
                 {
                     AnsiConsole.MarkupLine("[yellow]Deletion cancelled.[/]");
                     return 0;

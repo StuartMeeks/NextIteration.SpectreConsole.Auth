@@ -1,6 +1,7 @@
+using System.ComponentModel;
+
 using Spectre.Console.Auth.Persistence;
 using Spectre.Console.Cli;
-using System.ComponentModel;
 
 namespace Spectre.Console.Auth.Commands
 {
@@ -10,18 +11,13 @@ namespace Spectre.Console.Auth.Commands
     /// columns supplied by registered <see cref="ICredentialSummaryProvider"/>
     /// implementations.
     /// </summary>
-    public sealed class ListCredentialsCommand : AsyncCommand<ListCredentialsCommand.Settings>
+    /// <remarks>DI constructor.</remarks>
+    public sealed class ListCredentialsCommand(ICredentialManager credentialManager) : AsyncCommand<ListCredentialsCommand.Settings>
     {
-        private readonly ICredentialManager _credentialManager;
+        private readonly ICredentialManager _credentialManager = credentialManager;
 
-        private const string IconCheck = "\u2713"; // ✓
-        private const string IconCross = "\u2717"; // ✗
-
-        /// <summary>DI constructor.</summary>
-        public ListCredentialsCommand(ICredentialManager credentialManager)
-        {
-            _credentialManager = credentialManager;
-        }
+        private const string _iconCheck = "\u2713"; // ✓
+        private const string _iconCross = "\u2717"; // ✗
 
         /// <summary>CLI settings for <c>accounts list</c>.</summary>
         public sealed class Settings : CommandSettings
@@ -70,6 +66,7 @@ namespace Spectre.Console.Auth.Commands
             }
         }
 
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Globalization", "CA1305:Specify IFormatProvider", Justification = "<Pending>")]
         private async Task DisplayCredentialsForProvider(string provider)
         {
             var credentials = (await _credentialManager.ListCredentialsAsync(provider).ConfigureAwait(false)).ToList();
@@ -99,15 +96,15 @@ namespace Spectre.Console.Auth.Commands
             AnsiConsole.MarkupLine($"[bold]{provider}[/]");
 
             var table = new Table();
-            table.AddColumn("ID");
-            table.AddColumn("Name");
-            table.AddColumn("Environment");
+            _ = table.AddColumn("ID");
+            _ = table.AddColumn("Name");
+            _ = table.AddColumn("Environment");
             foreach (var key in displayFieldKeys)
             {
-                table.AddColumn(key);
+                _ = table.AddColumn(key);
             }
-            table.AddColumn("Created");
-            table.AddColumn("Active");
+            _ = table.AddColumn("Created");
+            _ = table.AddColumn("Active");
 
             foreach (var credential in credentials)
             {
@@ -126,12 +123,12 @@ namespace Spectre.Console.Auth.Commands
                 }
 
                 row.Add(credential.CreatedAt.ToString("yyyy-MM-dd HH:mm"));
-                row.Add(credential.IsSelected ? $"[green]{IconCheck}[/]" : $"[gray]{IconCross}[/]");
+                row.Add(credential.IsSelected ? $"[green]{_iconCheck}[/]" : $"[gray]{_iconCross}[/]");
 
-                table.AddRow([.. row]);
+                _ = table.AddRow([.. row]);
             }
 
-            table.Expand();
+            _ = table.Expand();
 
             AnsiConsole.Write(table);
         }

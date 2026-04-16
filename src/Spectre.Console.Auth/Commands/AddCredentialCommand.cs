@@ -1,6 +1,7 @@
+using System.ComponentModel;
+
 using Spectre.Console.Auth.Persistence;
 using Spectre.Console.Cli;
-using System.ComponentModel;
 
 namespace Spectre.Console.Auth.Commands
 {
@@ -10,10 +11,15 @@ namespace Spectre.Console.Auth.Commands
     /// credential fields (via the registered <see cref="ICredentialCollector"/>)
     /// and persists the result through <see cref="ICredentialManager"/>.
     /// </summary>
-    public sealed class AddCredentialCommand : AsyncCommand<AddCredentialCommand.Settings>
+    /// <remarks>DI constructor.</remarks>
+    public sealed class AddCredentialCommand(
+        ICredentialManager credentialManager,
+        IEnumerable<ICredentialCollector> collectors) : AsyncCommand<AddCredentialCommand.Settings>
     {
-        private readonly ICredentialManager _credentialManager;
-        private readonly IReadOnlyDictionary<string, ICredentialCollector> _collectorsByProvider;
+        private readonly ICredentialManager _credentialManager = credentialManager;
+        private readonly IReadOnlyDictionary<string, ICredentialCollector> _collectorsByProvider = collectors.ToDictionary(
+                c => c.ProviderName,
+                StringComparer.OrdinalIgnoreCase);
 
         /// <summary>CLI settings for <c>accounts add</c>.</summary>
         public sealed class Settings : CommandSettings
@@ -35,17 +41,6 @@ namespace Spectre.Console.Auth.Commands
             public string? AccountName { get; set; }
         }
 
-        /// <summary>DI constructor.</summary>
-        public AddCredentialCommand(
-            ICredentialManager credentialManager,
-            IEnumerable<ICredentialCollector> collectors)
-        {
-            _credentialManager = credentialManager;
-            _collectorsByProvider = collectors.ToDictionary(
-                c => c.ProviderName,
-                StringComparer.OrdinalIgnoreCase);
-        }
-
         /// <inheritdoc />
         public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
         {
@@ -62,7 +57,7 @@ namespace Spectre.Console.Auth.Commands
                 {
                     settings.Provider = await AnsiConsole.PromptAsync(new SelectionPrompt<string>()
                             .Title("Select credential [green]provider[/]:")
-                            .AddChoices(_collectorsByProvider.Keys.OrderBy(k => k))).ConfigureAwait(false);
+                            .AddChoices(_collectorsByProvider.Keys.OrderBy(k => k)), cancellationToken).ConfigureAwait(false);
                 }
 
                 if (!_collectorsByProvider.TryGetValue(settings.Provider, out var collector))
@@ -77,7 +72,7 @@ namespace Spectre.Console.Auth.Commands
                     settings.AccountName = await AnsiConsole.PromptAsync(new TextPrompt<string>("Enter account [green]name[/]:")
                             .PromptStyle("green")
                             .ValidationErrorMessage("[red]Account name cannot be empty[/]")
-                            .Validate(name => !string.IsNullOrWhiteSpace(name))).ConfigureAwait(false);
+                            .Validate(name => !string.IsNullOrWhiteSpace(name)), cancellationToken).ConfigureAwait(false);
                 }
 
                 var (credentialData, environment) = await collector.CollectAsync().ConfigureAwait(false);
@@ -93,7 +88,7 @@ namespace Spectre.Console.Auth.Commands
                 // Ask if user wants to select this credential as active
                 if (await AnsiConsole.ConfirmAsync("Do you want to set this as the active credential for this environment?", cancellationToken: cancellationToken).ConfigureAwait(false))
                 {
-                    await _credentialManager.SelectCredentialAsync(accountId).ConfigureAwait(false);
+                    _ = await _credentialManager.SelectCredentialAsync(accountId).ConfigureAwait(false);
                     AnsiConsole.MarkupLine("[green]Credential selected as active.[/]");
                 }
 

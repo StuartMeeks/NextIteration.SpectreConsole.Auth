@@ -1,3 +1,5 @@
+using Spectre.Console.Auth.Commands;
+
 namespace Spectre.Console.Auth.Persistence
 {
     /// <summary>
