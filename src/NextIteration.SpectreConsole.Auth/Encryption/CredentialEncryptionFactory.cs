@@ -1,4 +1,4 @@
-namespace Next.SpectreConsole.Auth.Encryption
+namespace NextIteration.SpectreConsole.Auth.Encryption
 {
     /// <summary>
     /// Factory for creating platform-appropriate credential encryption implementations.

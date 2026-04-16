@@ -1,4 +1,4 @@
-namespace Next.SpectreConsole.Auth
+namespace NextIteration.SpectreConsole.Auth
 {
     /// <summary>
     /// Options passed to <c>AddCredentialStore</c> to configure the credential store.

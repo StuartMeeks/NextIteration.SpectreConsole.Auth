@@ -1,4 +1,4 @@
-namespace Next.SpectreConsole.Auth.Encryption
+namespace NextIteration.SpectreConsole.Auth.Encryption
 {
     /// <summary>
     /// Symmetric encryption contract for credential payloads. Implementations

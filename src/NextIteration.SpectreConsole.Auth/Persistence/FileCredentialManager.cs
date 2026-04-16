@@ -1,9 +1,9 @@
 using System.Text.Json;
 
-using Next.SpectreConsole.Auth.Commands;
-using Next.SpectreConsole.Auth.Encryption;
+using NextIteration.SpectreConsole.Auth.Commands;
+using NextIteration.SpectreConsole.Auth.Encryption;
 
-namespace Next.SpectreConsole.Auth.Persistence
+namespace NextIteration.SpectreConsole.Auth.Persistence
 {
     /// <summary>
     /// Default <see cref="ICredentialManager"/> implementation backed by

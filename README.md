@@ -1,1 +1,1 @@
-# Next.SpectreConsole.Auth
+# NextIteration.SpectreConsole.Auth

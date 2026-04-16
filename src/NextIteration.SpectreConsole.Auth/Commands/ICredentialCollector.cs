@@ -1,4 +1,4 @@
-namespace Next.SpectreConsole.Auth.Commands
+namespace NextIteration.SpectreConsole.Auth.Commands
 {
     /// <summary>
     /// Provider-specific contributor that knows how to prompt the user for the data

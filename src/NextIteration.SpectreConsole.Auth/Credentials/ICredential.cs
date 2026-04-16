@@ -1,4 +1,4 @@
-namespace Next.SpectreConsole.Auth.Credentials
+namespace NextIteration.SpectreConsole.Auth.Credentials
 {
     /// <summary>
     /// Contract implemented by every concrete credential type. Each provider

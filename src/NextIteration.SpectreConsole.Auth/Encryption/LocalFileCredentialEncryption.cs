@@ -1,8 +1,8 @@
-using Next.SpectreConsole.Auth.Persistence;
+using NextIteration.SpectreConsole.Auth.Persistence;
 using System.Security.Cryptography;
 using System.Text;
 
-namespace Next.SpectreConsole.Auth.Encryption
+namespace NextIteration.SpectreConsole.Auth.Encryption
 {
     /// <summary>
     /// File-based credential encryption using AES-GCM with a machine-derived

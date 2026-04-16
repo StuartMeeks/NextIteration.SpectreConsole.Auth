@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 
-namespace Next.SpectreConsole.Auth.Encryption
+namespace NextIteration.SpectreConsole.Auth.Encryption
 {
     /// <summary>
     /// Uses Windows DPAPI (Data Protection API) for credential encryption.

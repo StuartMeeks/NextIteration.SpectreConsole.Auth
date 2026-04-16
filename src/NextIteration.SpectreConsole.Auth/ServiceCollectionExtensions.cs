@@ -1,13 +1,13 @@
 using Microsoft.Extensions.DependencyInjection;
 
-using Next.SpectreConsole.Auth.Commands;
-using Next.SpectreConsole.Auth.Encryption;
-using Next.SpectreConsole.Auth.Persistence;
+using NextIteration.SpectreConsole.Auth.Commands;
+using NextIteration.SpectreConsole.Auth.Encryption;
+using NextIteration.SpectreConsole.Auth.Persistence;
 
-namespace Next.SpectreConsole.Auth
+namespace NextIteration.SpectreConsole.Auth
 {
     /// <summary>
-    /// DI extensions for registering the <c>Next.SpectreConsole.Auth</c>
+    /// DI extensions for registering the <c>NextIteration.SpectreConsole.Auth</c>
     /// credential store.
     /// </summary>
     public static class ServiceCollectionExtensions

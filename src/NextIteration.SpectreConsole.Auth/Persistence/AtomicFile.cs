@@ -1,4 +1,4 @@
-namespace Next.SpectreConsole.Auth.Persistence
+namespace NextIteration.SpectreConsole.Auth.Persistence
 {
     /// <summary>
     /// Crash-safe file writers. Each method writes to a uniquely-named temp

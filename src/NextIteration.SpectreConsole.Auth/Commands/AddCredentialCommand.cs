@@ -1,10 +1,10 @@
 using Spectre.Console;
 using System.ComponentModel;
 
-using Next.SpectreConsole.Auth.Persistence;
+using NextIteration.SpectreConsole.Auth.Persistence;
 using Spectre.Console.Cli;
 
-namespace Next.SpectreConsole.Auth.Commands
+namespace NextIteration.SpectreConsole.Auth.Commands
 {
     /// <summary>
     /// Spectre.Console command for the <c>accounts add</c> branch. Prompts
