@@ -24,6 +24,22 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      # The libsecret backend exercises the Secret Service D-Bus API
+      # which isn't running by default on ubuntu-latest. Install and start
+      # gnome-keyring-daemon so LibsecretCredentialManagerTests actually
+      # hit libsecret instead of short-circuiting via the
+      # "secret-service-unavailable" probe.
+      - name: Install and start gnome-keyring-daemon
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gnome-keyring dbus-x11 libsecret-1-0 libsecret-1-dev
+          eval "$(dbus-launch --sh-syntax)"
+          echo "DBUS_SESSION_BUS_ADDRESS=$DBUS_SESSION_BUS_ADDRESS" >> $GITHUB_ENV
+          echo "DBUS_SESSION_BUS_PID=$DBUS_SESSION_BUS_PID" >> $GITHUB_ENV
+          echo -n '' | gnome-keyring-daemon --unlock
+          gnome-keyring-daemon --start --components=secrets &
+          sleep 2
+
       - name: Restore
         run: dotnet restore
 
@@ -41,6 +57,32 @@ jobs:
         with:
           name: nuget-package
           path: ./artifacts/*.nupkg
+
+  # Keychain backend is macOS-only. This job runs the same test suite on a
+  # real macOS runner so the Keychain tests actually exercise
+  # Security.framework (on Linux/Windows they vacuously pass via the
+  # OperatingSystem.IsMacOS early-return guard). Runs in parallel with the
+  # primary build job.
+  test-macos:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test --configuration Release --no-build --verbosity normal
 
   publish:
     needs: build

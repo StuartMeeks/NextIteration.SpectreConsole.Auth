@@ -228,6 +228,117 @@ public sealed class LocalFileCredentialEncryptionTests
             () => new LocalFileCredentialEncryption("   "));
     }
 
+    // =========================
+    // Caller-supplied additional entropy
+    // =========================
+
+    [Fact]
+    public async Task RoundTrip_WithCallerEntropy_ReturnsOriginal()
+    {
+        using var temp = new TempDir();
+        var entropy = "secret-deployment-token"u8.ToArray();
+        var encryption = new LocalFileCredentialEncryption(temp.Path, entropy);
+
+        var cipher = await encryption.EncryptAsync("hello with entropy");
+        var plain = await encryption.DecryptAsync(cipher);
+
+        Assert.Equal("hello with entropy", plain);
+    }
+
+    [Fact]
+    public async Task Decrypt_WithDifferentEntropy_Throws()
+    {
+        using var temp = new TempDir();
+        var entropyA = "entropy-alpha"u8.ToArray();
+        var encryption = new LocalFileCredentialEncryption(temp.Path, entropyA);
+        var cipher = await encryption.EncryptAsync("bound to entropy alpha");
+
+        // Delete the keystore and create a new instance with a different
+        // entropy — the new instance will write a fresh keystore and fail
+        // to decrypt the old ciphertext.
+        File.Delete(Path.Combine(temp.Path, ".keystore"));
+        var entropyB = "entropy-bravo"u8.ToArray();
+        var wrongEntropy = new LocalFileCredentialEncryption(temp.Path, entropyB);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => wrongEntropy.DecryptAsync(cipher));
+        Assert.Contains("integrity check", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Decrypt_WithEntropyAgainstKeystoreWrittenWithout_ThrowsIntegrityError()
+    {
+        using var temp = new TempDir();
+
+        // Write a keystore with NO entropy, then try to read with entropy
+        // set — the derived KEK differs, so loading the keystore fails.
+        var noEntropy = new LocalFileCredentialEncryption(temp.Path);
+        _ = await noEntropy.EncryptAsync("anything");
+
+        var withEntropy = new LocalFileCredentialEncryption(temp.Path, "new-entropy"u8.ToArray());
+
+        // The very first call will try to load + decrypt the keystore using
+        // the wrong KEK.
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => withEntropy.EncryptAsync("this triggers keystore load"));
+    }
+
+    [Fact]
+    public async Task Encryption_IsBackwardCompatible_WhenEntropyNotSupplied()
+    {
+        // Regression guard: a keystore written by the pre-entropy code path
+        // must remain readable when the caller upgrades to the new API but
+        // doesn't pass entropy. Since we can't literally run the old code
+        // here, this test proves the equivalent contract: omitting entropy
+        // (null or empty) produces the same KEK as the pre-entropy default.
+        using var temp = new TempDir();
+
+        var withoutEntropy = new LocalFileCredentialEncryption(temp.Path);
+        var cipher = await withoutEntropy.EncryptAsync("backward compat check");
+
+        // New instance with explicit null — should read the existing keystore.
+        var explicitNull = new LocalFileCredentialEncryption(temp.Path, null);
+        Assert.Equal("backward compat check", await explicitNull.DecryptAsync(cipher));
+
+        // Same for an empty array — treated as "no entropy."
+        var emptyArray = new LocalFileCredentialEncryption(temp.Path, []);
+        Assert.Equal("backward compat check", await emptyArray.DecryptAsync(cipher));
+    }
+
+    [Fact]
+    public async Task Entropy_Persists_AcrossInstances()
+    {
+        using var temp = new TempDir();
+        var entropy = "stable-deployment-secret"u8.ToArray();
+
+        string cipher;
+        {
+            var first = new LocalFileCredentialEncryption(temp.Path, entropy);
+            cipher = await first.EncryptAsync("survives across instances");
+        }
+
+        var second = new LocalFileCredentialEncryption(temp.Path, entropy);
+        Assert.Equal("survives across instances", await second.DecryptAsync(cipher));
+    }
+
+    [Fact]
+    public async Task Entropy_DefensivelyCopied_MutationAfterConstructIsIgnored()
+    {
+        using var temp = new TempDir();
+        var entropy = new byte[] { 1, 2, 3, 4 };
+        var encryption = new LocalFileCredentialEncryption(temp.Path, entropy);
+
+        var cipher = await encryption.EncryptAsync("immutable entropy");
+
+        // Mutate the caller's buffer — the stored copy must be unaffected.
+        for (var i = 0; i < entropy.Length; i++)
+        {
+            entropy[i] = 0;
+        }
+
+        Assert.Equal("immutable entropy", await encryption.DecryptAsync(cipher));
+    }
+
     [Fact]
     public async Task ConcurrentDecrypt_WithSharedInstance_Succeeds()
     {

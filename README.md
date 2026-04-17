@@ -124,17 +124,42 @@ Credentials are encrypted with **AES-GCM** (authenticated — tampering is detec
 - A casual attacker who ends up with a copy of the `.keystore` file but lacks knowledge of the originating machine and user.
 - Undetected tampering of credential files (AES-GCM's authentication tag refuses decryption on any modification).
 
-**What it does *not* protect against:**
+**What it does *not* protect against** (in default mode):
 
-- A local attacker who has read access to the credentials directory **and** knows the machine hostname + username — the KEK is deterministic given those inputs. For stronger isolation on Windows, use `CredentialEncryptionFactory.CreateDpapi()` to encrypt against the current user's DPAPI keychain instead.
+- A local attacker who has read access to the credentials directory **and** knows the machine hostname + username — the KEK is deterministic given those inputs. Close this gap either by supplying `AdditionalEntropy` (see below) or by using DPAPI / a platform keychain.
 - A compromised running process: once your CLI has decrypted a credential in memory, it's in memory.
+
+**Hardening with `AdditionalEntropy`:**
+
+The default KEK is derived purely from machine state, so anyone who copies the `.keystore` file plus the machine's hostname/username can decrypt. Pass a secret into `CredentialStoreOptions.AdditionalEntropy` to close that gap:
+
+```csharp
+services.AddCredentialStore(opts =>
+{
+    opts.CredentialsDirectory = Path.Combine(userProfile, ".my-cli", "credentials");
+    opts.AdditionalEntropy = Convert.FromHexString(
+        Environment.GetEnvironmentVariable("MY_CLI_ENTROPY_HEX")
+        ?? throw new InvalidOperationException("MY_CLI_ENTROPY_HEX not set"));
+});
+```
+
+The entropy is mixed into the PBKDF2 password so the KEK now depends on both the machine AND this value. An attacker with the keystore file but without the entropy can't decrypt. Common sources: a per-deployment secret from env / HSM, a value from a secret manager, a user-entered passphrase.
+
+Caveats:
+
+- Changing the entropy value invalidates the existing keystore — decryption will fail with "integrity check" and credentials must be re-added.
+- `AdditionalEntropy` is ignored when `UseKeychain` or `UseKeyring` is set (those backends don't use PBKDF2).
 
 The real security boundary is the **filesystem permissions on the credentials directory**. On first creation the library sets:
 
 - **Unix:** mode `0700` on the directory, `0600` on every file.
 - **Windows:** ACL inheritance disabled, explicit `FullControl` for the current user and `SYSTEM` only.
 
-For cryptographically stronger cross-platform isolation, the project [TODO](TODO.md) tracks plans for Apple Keychain and libsecret backends (PRs welcome).
+For cryptographically stronger isolation:
+
+- **Windows:** switch to DPAPI via `CredentialEncryptionFactory.CreateDpapi()`.
+- **macOS:** opt into the experimental Keychain backend — see [Advanced](#macos-keychain-backend-experimental) below.
+- **Linux:** opt into the experimental libsecret backend — see [Advanced](#linux-libsecret-backend-experimental) below.
 
 ---
 
@@ -240,6 +265,57 @@ See the companion [provider packages repo](https://github.com/StuartMeeks/NextIt
 ---
 
 ## Advanced
+
+### Linux libsecret backend (experimental)
+
+On Linux you can opt into storing credentials directly in the user's
+keyring (GNOME Keyring, KWallet's shim, any Secret Service implementation)
+via libsecret. Each credential becomes a Secret Service item, visible and
+manageable via Seahorse/KWalletManager.
+
+```csharp
+services.AddCredentialStore(opts =>
+{
+    opts.UseKeyring = true;
+    opts.KeyringAppIdentifier = "com.mycompany.my-cli";
+});
+```
+
+> ⚠️ **Experimental.** Requires a running Secret Service daemon — headless
+> containers and SSH-only servers typically don't have one, and operations
+> will throw with a clear message. Primarily validated against GNOME
+> Keyring on Ubuntu. `UseKeyring = true` on non-Linux platforms throws
+> `PlatformNotSupportedException` at registration time.
+
+`UseKeyring` and `UseKeychain` are mutually exclusive — setting both throws.
+The file-based backend remains the default when neither is set.
+
+### macOS Keychain backend (experimental)
+
+On macOS you can opt into storing credentials directly in the user's login
+Keychain instead of in an encrypted file. Each credential becomes a
+generic-password keychain item, visible and manageable via `Keychain
+Access.app`. No `.keystore`, no AES, no file permissions — the Keychain
+itself is the secret store.
+
+```csharp
+services.AddCredentialStore(opts =>
+{
+    opts.UseKeychain = true;
+    opts.KeychainAppIdentifier = "com.mycompany.my-cli";
+    // CredentialsDirectory is ignored when UseKeychain is set.
+});
+```
+
+> ⚠️ **Experimental.** The Keychain backend is P/Invoked against
+> `Security.framework` and exercised by a macOS CI runner, but hasn't yet
+> been validated against diverse deployment environments. Opt in knowingly.
+> `UseKeychain = true` on non-macOS platforms throws `PlatformNotSupportedException`
+> at registration time; the file-based backend remains the default.
+
+The `KeychainAppIdentifier` namespaces your CLI's keychain items so they
+don't collide with other tools sharing the same login keychain. Use a
+reverse-DNS string like `com.mycompany.my-cli`.
 
 ### Switching to DPAPI on Windows
 

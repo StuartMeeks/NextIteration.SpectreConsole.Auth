@@ -6,22 +6,33 @@ namespace NextIteration.SpectreConsole.Auth.Encryption
 {
     /// <summary>
     /// File-based credential encryption using AES-GCM with a machine-derived
-    /// key-encryption key. Works on Windows, macOS, and Linux, but is best
-    /// thought of as obfuscation-plus-tamper-detection rather than strong
-    /// protection against a local attacker — see remarks.
+    /// key-encryption key. Works on Windows, macOS, and Linux.
     /// </summary>
     /// <remarks>
     /// Authenticated encryption (AES-GCM) detects tampering on decrypt.
     /// <para>
-    /// Security model: the data encryption key lives encrypted in a
-    /// <c>.keystore</c> file inside the credentials directory. That file is
-    /// encrypted with a KEK derived from <c>{MachineName}:{UserName}:{OSVersion}</c>
-    /// via PBKDF2. Because all KEK inputs are discoverable on the machine, the
-    /// real security boundary is the filesystem permissions on the credentials
-    /// directory, not the cryptography. An attacker with read access to the
-    /// keystore file on the same machine/user can derive the KEK and decrypt
-    /// credentials. Use DPAPI (on Windows) or a platform keychain for stronger
-    /// protection against local attackers.
+    /// <b>Default security model</b> (no caller-supplied entropy): the data
+    /// encryption key lives encrypted in a <c>.keystore</c> file inside the
+    /// credentials directory. That file is encrypted with a KEK derived from
+    /// <c>{MachineName}:{UserName}:{OSVersion}</c> via PBKDF2. Because all
+    /// KEK inputs are discoverable on the machine, the real security
+    /// boundary is the filesystem permissions on the credentials directory,
+    /// not the cryptography. An attacker with read access to the keystore
+    /// file on the same machine/user can derive the KEK and decrypt
+    /// credentials.
+    /// </para>
+    /// <para>
+    /// <b>Hardened mode</b>: supply <c>additionalEntropy</c> via the
+    /// constructor (or <see cref="CredentialStoreOptions.AdditionalEntropy"/>).
+    /// The entropy is mixed into the PBKDF2 password so the KEK depends on
+    /// something an attacker cannot recover from the machine alone — for
+    /// example a per-deployment secret from an environment variable,
+    /// hardware token, or HSM. In this mode the keystore file alone is
+    /// insufficient to decrypt; the entropy value must also be known.
+    /// </para>
+    /// <para>
+    /// For the strongest protection, use DPAPI (on Windows) or a platform
+    /// keychain (macOS Keychain, Linux libsecret) instead.
     /// </para>
     /// </remarks>
     public class LocalFileCredentialEncryption : ICredentialEncryption
@@ -32,17 +43,18 @@ namespace NextIteration.SpectreConsole.Auth.Encryption
         private const int TagSize = 16;
         private const int KeySize = 32; // AES-256
 
-        // PBKDF2-HMAC-SHA256 iteration count. OWASP 2023 guidance is 600,000.
-        // Iterations provide no real benefit while the KEK inputs are all
-        // machine-derived (an attacker with keystore access computes the KEK
-        // directly, not via brute force), but this constant starts earning
-        // its keep the moment the caller-supplied additional-entropy TODO
-        // lands — at which point it protects the secret-mixed KEK against
-        // offline brute force.
+        // PBKDF2-HMAC-SHA256 iteration count. OWASP 2023 guidance is
+        // 600,000. In default mode (no caller entropy) iterations provide
+        // little benefit because the KEK inputs are all machine-derived; an
+        // attacker with keystore access computes the KEK directly. In
+        // hardened mode (caller entropy supplied) the iterations earn their
+        // keep — they force the cost-per-guess on any offline brute-force
+        // attempt against the caller-supplied secret.
         private const int Pbkdf2Iterations = 600_000;
 
         private readonly string _keyFile;
-        private readonly byte[] _additionalEntropy;
+        private readonly byte[] _salt;
+        private readonly byte[]? _callerEntropy;
 
         // The data encryption key is derived once per instance lifetime and
         // cached. PBKDF2 at 600k iterations is ~150-200ms on modern hardware
@@ -59,17 +71,36 @@ namespace NextIteration.SpectreConsole.Auth.Encryption
         /// inside <paramref name="credentialsDirectory"/>. The keystore is
         /// created on first encrypt/decrypt call if it does not already exist.
         /// </summary>
+        /// <param name="credentialsDirectory">
+        /// Directory where the <c>.keystore</c> file is (or will be) created.
+        /// </param>
+        /// <param name="additionalEntropy">
+        /// Optional caller-supplied entropy mixed into the key-derivation
+        /// step. When non-null and non-empty, the KEK depends on this value
+        /// in addition to the machine-derived inputs — the file-based
+        /// backend then requires both the keystore file AND the entropy
+        /// value to decrypt. Changing the entropy invalidates any existing
+        /// keystore; callers who rotate the value must delete the keystore
+        /// and re-add credentials.
+        /// </param>
         /// <exception cref="ArgumentException">
         /// <paramref name="credentialsDirectory"/> is null, empty, or whitespace.
         /// </exception>
-        public LocalFileCredentialEncryption(string credentialsDirectory)
+        public LocalFileCredentialEncryption(string credentialsDirectory, byte[]? additionalEntropy = null)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(credentialsDirectory);
 
             _keyFile = Path.Combine(credentialsDirectory, ".keystore");
 
-            // Salt for PBKDF2. Non-secret but stable per machine/user.
-            _additionalEntropy = Encoding.UTF8.GetBytes($"{Environment.MachineName}:{Environment.UserName}");
+            // PBKDF2 salt — non-secret, stable per machine/user. Caller
+            // entropy is mixed into the password side instead of the salt
+            // so it contributes to HMAC input during the key-stretch loop.
+            _salt = Encoding.UTF8.GetBytes($"{Environment.MachineName}:{Environment.UserName}");
+
+            // Defensive copy — the caller may mutate or clear their buffer.
+            _callerEntropy = additionalEntropy is { Length: > 0 }
+                ? [.. additionalEntropy]
+                : null;
 
             _dataKey = new Lazy<Task<byte[]>>(LoadOrCreateDataKeyAsync, LazyThreadSafetyMode.ExecutionAndPublication);
         }
@@ -116,9 +147,12 @@ namespace NextIteration.SpectreConsole.Auth.Encryption
             }
             catch (AuthenticationTagMismatchException ex)
             {
-                throw new InvalidOperationException(
-                    "Credential data failed integrity check. The file has been tampered with, or was encrypted with a different key (for example, the keystore was copied from another machine or user).",
-                    ex);
+                // Message adapts to whether caller entropy is in play, so a
+                // consumer who just changed their entropy knows where to look.
+                var message = _callerEntropy is null
+                    ? "Credential data failed integrity check. The file has been tampered with, or was encrypted with a different key (for example, the keystore was copied from another machine or user)."
+                    : "Credential data failed integrity check. The file has been tampered with, or was encrypted with a different additional-entropy value, or on a different machine.";
+                throw new InvalidOperationException(message, ex);
             }
             catch (InvalidOperationException)
             {
@@ -167,11 +201,27 @@ namespace NextIteration.SpectreConsole.Auth.Encryption
 
         private byte[] DeriveKeyEncryptionKey()
         {
-            // Inputs are non-secret (discoverable on the machine); PBKDF2
-            // iterations provide no real protection here today. The security
-            // boundary is filesystem permissions on the keystore file.
-            var password = $"{Environment.MachineName}:{Environment.UserName}:{Environment.OSVersion}";
-            return Rfc2898DeriveBytes.Pbkdf2(password, _additionalEntropy, Pbkdf2Iterations, HashAlgorithmName.SHA256, KeySize);
+            var machineIdentity = $"{Environment.MachineName}:{Environment.UserName}:{Environment.OSVersion}";
+
+            if (_callerEntropy is null)
+            {
+                // Default mode — password identical to pre-entropy behaviour
+                // so keystores written by earlier library versions remain
+                // readable.
+                return Rfc2898DeriveBytes.Pbkdf2(machineIdentity, _salt, Pbkdf2Iterations, HashAlgorithmName.SHA256, KeySize);
+            }
+
+            // Hardened mode — caller entropy is concatenated with a null
+            // separator in front of the machine identity. Using the byte
+            // overload rather than string interpolation so caller-supplied
+            // bytes don't have to be valid UTF-8.
+            var machineBytes = Encoding.UTF8.GetBytes(machineIdentity);
+            var password = new byte[_callerEntropy.Length + 1 + machineBytes.Length];
+            Buffer.BlockCopy(_callerEntropy, 0, password, 0, _callerEntropy.Length);
+            password[_callerEntropy.Length] = 0x00;
+            Buffer.BlockCopy(machineBytes, 0, password, _callerEntropy.Length + 1, machineBytes.Length);
+
+            return Rfc2898DeriveBytes.Pbkdf2(password, _salt, Pbkdf2Iterations, HashAlgorithmName.SHA256, KeySize);
         }
 
         /// <summary>

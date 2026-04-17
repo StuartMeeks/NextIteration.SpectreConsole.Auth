@@ -1,3 +1,4 @@
+using System.Runtime.Versioning;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -8,6 +9,7 @@ namespace NextIteration.SpectreConsole.Auth.Encryption
     /// Credentials are encrypted using the current user's profile.
     /// Windows only.
     /// </summary>
+    [SupportedOSPlatform("windows")]
     public class DpapiCredentialEncryption : ICredentialEncryption
     {
         /// <summary>
@@ -23,7 +25,6 @@ namespace NextIteration.SpectreConsole.Auth.Encryption
         }
 
         /// <inheritdoc />
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Interoperability", "CA1416:Validate platform compatibility", Justification = "Code only called when running on windows operating system.")]
         public Task<string> EncryptAsync(string plainText)
         {
             if (string.IsNullOrEmpty(plainText))
@@ -46,7 +47,6 @@ namespace NextIteration.SpectreConsole.Auth.Encryption
         }
 
         /// <inheritdoc />
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Interoperability", "CA1416:Validate platform compatibility", Justification = "Code only called when running on windows operating system.")]
         public Task<string> DecryptAsync(string encryptedText)
         {
             if (string.IsNullOrEmpty(encryptedText))

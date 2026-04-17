@@ -7,6 +7,12 @@
 		<SatelliteResourceLanguages>en</SatelliteResourceLanguages>
 		<GenerateDocumentationFile>true</GenerateDocumentationFile>
 		<AnalysisLevel>latest</AnalysisLevel>
+		<!--
+			LibraryImport source generator emits unsafe blocks for the
+			Keychain P/Invoke layer. The unsafe code stays entirely within
+			the interop surface; no unsafe APIs leak to consumers.
+		-->
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 	</PropertyGroup>
 
 	<PropertyGroup>
