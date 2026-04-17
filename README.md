@@ -348,7 +348,7 @@ Everything else is transitive.
 
 ## Contributing
 
-Issues and PRs welcome. The [TODO](TODO.md) tracks the current roadmap — notably the planned Apple Keychain and libsecret backends for stronger cross-platform isolation.
+Issues and PRs welcome. The [TODO](TODO.md) tracks outstanding hardening — keystore format versioning, zero-on-dispose for caller-supplied entropy, ACL-scoped Keychain access, and KWallet validation for the libsecret backend.
 
 When contributing code, please keep the zero-warning, fully-documented public surface. `TreatWarningsAsErrors` is on for a reason.
 
