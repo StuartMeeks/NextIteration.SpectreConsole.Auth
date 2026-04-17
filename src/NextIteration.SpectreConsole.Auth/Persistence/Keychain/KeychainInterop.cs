@@ -278,6 +278,11 @@ internal static partial class KeychainInterop
 
         foreach (var (key, value) in pairs)
         {
+            // Skip pairs with a NULL value — callers use IntPtr.Zero as a
+            // "don't include this key at all" marker (e.g. conditional
+            // kSecReturnData). Sending a NULL-valued entry to
+            // Security.framework causes errSecParam on some queries.
+            if (value == IntPtr.Zero) continue;
             CFDictionarySetValue(dict, key, value);
         }
         return dict;

@@ -402,6 +402,12 @@ public sealed class KeychainCredentialManager : ICredentialManager
 
     private static List<KeychainItem> QueryItems(string service, bool includeData)
     {
+        // Bulk query: request attributes only. Combining kSecReturnAttributes
+        // + kSecReturnData + kSecMatchLimitAll in a single SecItemCopyMatching
+        // call fails with errSecParam (-50) on macOS — Security.framework only
+        // supports that combination with kSecMatchLimitOne. When data is
+        // needed, we do a per-item follow-up below.
+        List<KeychainItem> stubs;
         var handles = new List<IntPtr>();
         try
         {
@@ -412,7 +418,6 @@ public sealed class KeychainCredentialManager : ICredentialManager
                 (Constants.KSecAttrService, serviceCf),
                 (Constants.KSecMatchLimit, Constants.KSecMatchLimitAll),
                 (Constants.KSecReturnAttributes, Constants.KCFBooleanTrue),
-                (Constants.KSecReturnData, includeData ? Constants.KCFBooleanTrue : IntPtr.Zero),
             ]));
 
             var status = SecItemCopyMatching(query, out var result);
@@ -421,7 +426,7 @@ public sealed class KeychainCredentialManager : ICredentialManager
 
             try
             {
-                return DecodeArray(result);
+                stubs = DecodeArray(result);
             }
             finally
             {
@@ -432,6 +437,27 @@ public sealed class KeychainCredentialManager : ICredentialManager
         {
             ReleaseAll(handles);
         }
+
+        if (!includeData) return stubs;
+
+        // Data round-trip: per-item QuerySingleItem(includeData: true) uses
+        // kSecMatchLimitOne which supports attributes+data in one call.
+        var withData = new List<KeychainItem>(stubs.Count);
+        foreach (var stub in stubs)
+        {
+            if (stub.Account is null)
+            {
+                withData.Add(stub);
+                continue;
+            }
+
+            var full = QuerySingleItem(stub.Service, stub.Account, includeData: true);
+            // If the item vanished between queries (theoretically possible
+            // under concurrent modification), fall back to the attribute-only
+            // stub rather than dropping it.
+            withData.Add(full ?? stub);
+        }
+        return withData;
     }
 
     private List<KeychainItem> QueryAllItemsForApp(bool includeData)
@@ -440,6 +466,10 @@ public sealed class KeychainCredentialManager : ICredentialManager
         // to items whose service starts with our appIdentifier. Keychain
         // queries require *some* filter so we fall back to class-only and
         // trust the prefix check.
+        //
+        // Like QueryItems above, we fetch attributes only here; if data is
+        // requested, a per-item follow-up runs on the filtered set.
+        List<KeychainItem> stubs;
         var handles = new List<IntPtr>();
         try
         {
@@ -448,7 +478,6 @@ public sealed class KeychainCredentialManager : ICredentialManager
                 (Constants.KSecClass, Constants.KSecClassGenericPassword),
                 (Constants.KSecMatchLimit, Constants.KSecMatchLimitAll),
                 (Constants.KSecReturnAttributes, Constants.KCFBooleanTrue),
-                (Constants.KSecReturnData, includeData ? Constants.KCFBooleanTrue : IntPtr.Zero),
             ]));
 
             var status = SecItemCopyMatching(query, out var result);
@@ -458,7 +487,7 @@ public sealed class KeychainCredentialManager : ICredentialManager
             try
             {
                 var items = DecodeArray(result);
-                return items
+                stubs = items
                     .Where(i => i.Service.StartsWith(_appIdentifier + ".", StringComparison.Ordinal)
                         || string.Equals(i.Service, SelectionsService, StringComparison.Ordinal))
                     .ToList();
@@ -472,6 +501,21 @@ public sealed class KeychainCredentialManager : ICredentialManager
         {
             ReleaseAll(handles);
         }
+
+        if (!includeData) return stubs;
+
+        var withData = new List<KeychainItem>(stubs.Count);
+        foreach (var stub in stubs)
+        {
+            if (stub.Account is null)
+            {
+                withData.Add(stub);
+                continue;
+            }
+            var full = QuerySingleItem(stub.Service, stub.Account, includeData: true);
+            withData.Add(full ?? stub);
+        }
+        return withData;
     }
 
     // =========================
