@@ -17,12 +17,23 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence;
 /// return false and tests pass vacuously.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Each test uses a unique app identifier per run (guid-suffixed) so
 /// stale items from a previous failed run don't collide.
+/// </para>
+/// <para>
+/// Tests target the <c>"session"</c> collection (in-memory, always present
+/// on a running daemon). The default <c>"default"</c>/login collection
+/// requires provisioning a <c>login.keyring</c> file on disk, which fresh
+/// CI runners don't have — targeting <c>"session"</c> side-steps that
+/// without any CI bootstrap gymnastics.
+/// </para>
 /// </remarks>
 [SupportedOSPlatform("linux")]
 public sealed class LibsecretCredentialManagerTests : IDisposable
 {
+    private const string TestCollection = "session";
+
     private readonly string _appIdentifier;
     private readonly bool _skip;
 
@@ -33,9 +44,11 @@ public sealed class LibsecretCredentialManagerTests : IDisposable
     }
 
     /// <summary>
-    /// Best-effort probe: try a trivial operation and treat any exception
-    /// as "Secret Service isn't available." Not running on Linux counts as
-    /// unavailable too so the test class compiles clean on any platform.
+    /// Best-effort probe: try a store + clear against the session collection
+    /// and treat any exception as "Secret Service isn't available." A bare
+    /// search doesn't exercise the collection write path, so we do a real
+    /// round-trip. Not running on Linux counts as unavailable too so the
+    /// test class compiles clean on any platform.
     /// </summary>
     private static bool IsSecretServiceAvailable()
     {
@@ -43,8 +56,11 @@ public sealed class LibsecretCredentialManagerTests : IDisposable
         try
         {
 #pragma warning disable CA1416
-            var probe = new LibsecretCredentialManager($"probe.{Guid.NewGuid():N}");
-            _ = probe.GetProviderNamesAsync().GetAwaiter().GetResult();
+            var probe = new LibsecretCredentialManager(
+                $"probe.{Guid.NewGuid():N}",
+                collection: TestCollection);
+            var id = probe.AddCredentialAsync("Probe", "probe", "Probe", "{}").GetAwaiter().GetResult();
+            _ = probe.DeleteCredentialAsync(id).GetAwaiter().GetResult();
 #pragma warning restore CA1416
             return true;
         }
@@ -65,7 +81,7 @@ public sealed class LibsecretCredentialManagerTests : IDisposable
 #pragma warning disable CA1416
         try
         {
-            var manager = new LibsecretCredentialManager(_appIdentifier);
+            var manager = new LibsecretCredentialManager(_appIdentifier, collection: TestCollection);
             foreach (var provider in manager.GetProviderNamesAsync().GetAwaiter().GetResult())
             {
                 foreach (var summary in manager.ListCredentialsAsync(provider).GetAwaiter().GetResult())
@@ -84,7 +100,7 @@ public sealed class LibsecretCredentialManagerTests : IDisposable
     private LibsecretCredentialManager NewManager(IEnumerable<ICredentialSummaryProvider>? summary = null)
     {
 #pragma warning disable CA1416
-        return new LibsecretCredentialManager(_appIdentifier, summary);
+        return new LibsecretCredentialManager(_appIdentifier, summary, TestCollection);
 #pragma warning restore CA1416
     }
 
@@ -229,7 +245,7 @@ public sealed class LibsecretCredentialManagerTests : IDisposable
 
         var neighbourIdentifier = $"test.nextiteration.sca.neighbour.{Guid.NewGuid():N}";
 #pragma warning disable CA1416
-        var neighbour = new LibsecretCredentialManager(neighbourIdentifier);
+        var neighbour = new LibsecretCredentialManager(neighbourIdentifier, collection: TestCollection);
 #pragma warning restore CA1416
         try
         {

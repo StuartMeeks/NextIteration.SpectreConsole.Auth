@@ -72,5 +72,17 @@ namespace NextIteration.SpectreConsole.Auth
         /// <see cref="UseKeyring"/> is <see langword="true"/>.
         /// </summary>
         public string KeyringAppIdentifier { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Secret Service collection that stored items are written to.
+        /// Defaults to <c>"default"</c> (usually the user's login keyring).
+        /// Set to <c>"session"</c> for the in-memory session keyring that
+        /// always exists on a running Secret Service daemon — useful for
+        /// CI environments where the login keyring has not been
+        /// provisioned, or for ephemeral use where persistence isn't
+        /// required. Only consulted when <see cref="UseKeyring"/> is
+        /// <see langword="true"/>.
+        /// </summary>
+        public string KeyringCollection { get; set; } = "default";
     }
 }

@@ -42,24 +42,32 @@ public sealed class LibsecretCredentialManager : ICredentialManager
     private const string KindSelection = "selection";
 
     private readonly string _appIdentifier;
+    private readonly string _collection;
     private readonly Dictionary<string, ICredentialSummaryProvider> _summaryProviders;
 
     /// <summary>
     /// Constructs the manager. <paramref name="appIdentifier"/> scopes this
     /// CLI's items in the keyring so they don't collide with other tools
     /// using the same keyring (e.g. <c>com.mycompany.my-cli</c>).
+    /// <paramref name="collection"/> selects the Secret Service collection
+    /// that new items are written to; defaults to <c>"default"</c> (usually
+    /// the login keyring). Pass <c>"session"</c> to target the in-memory
+    /// session collection, which always exists on a running daemon.
     /// </summary>
     public LibsecretCredentialManager(
         string appIdentifier,
-        IEnumerable<ICredentialSummaryProvider>? summaryProviders = null)
+        IEnumerable<ICredentialSummaryProvider>? summaryProviders = null,
+        string collection = "default")
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(appIdentifier);
+        ArgumentException.ThrowIfNullOrWhiteSpace(collection);
         if (!OperatingSystem.IsLinux())
         {
             throw new PlatformNotSupportedException("LibsecretCredentialManager is only available on Linux.");
         }
 
         _appIdentifier = appIdentifier;
+        _collection = collection;
         _summaryProviders = (summaryProviders ?? [])
             .ToDictionary(p => p.ProviderName, StringComparer.OrdinalIgnoreCase);
     }
@@ -293,7 +301,7 @@ public sealed class LibsecretCredentialManager : ICredentialManager
         public string? Secret { get; init; }
     }
 
-    private static void StoreItem(Dictionary<string, string> attributes, string label, string password)
+    private void StoreItem(Dictionary<string, string> attributes, string label, string password)
     {
         var attrs = NewAttributes(attributes);
         try
@@ -301,7 +309,7 @@ public sealed class LibsecretCredentialManager : ICredentialManager
             var status = secret_password_storev_sync(
                 IntPtr.Zero,
                 attrs,
-                SecretCollectionDefault,
+                _collection,
                 label,
                 password,
                 IntPtr.Zero,

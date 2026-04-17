@@ -91,6 +91,25 @@ internal static partial class KeychainInterop
     internal static partial IntPtr CFArrayGetValueAtIndex(IntPtr theArray, long idx);
 
     // =========================
+    // CoreFoundation — CFType introspection
+    //
+    // Used to distinguish CFArray vs CFDictionary results from
+    // SecItemCopyMatching. Probing a CFArray with CFDictionaryGetValue
+    // toll-free-bridges to [NSArray objectForKey:] which doesn't exist and
+    // raises NSInvalidArgumentException — crashing the process. Checking the
+    // CF type ID first is the supported way.
+    // =========================
+
+    [LibraryImport(CoreFoundation)]
+    internal static partial UIntPtr CFGetTypeID(IntPtr cf);
+
+    [LibraryImport(CoreFoundation)]
+    internal static partial UIntPtr CFArrayGetTypeID();
+
+    [LibraryImport(CoreFoundation)]
+    internal static partial UIntPtr CFDictionaryGetTypeID();
+
+    // =========================
     // CoreFoundation — CFDate / CFNumber
     // =========================
 

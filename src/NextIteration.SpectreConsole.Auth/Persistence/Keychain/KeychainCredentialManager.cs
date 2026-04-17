@@ -482,14 +482,22 @@ public sealed class KeychainCredentialManager : ICredentialManager
     {
         if (arrayOrDict == IntPtr.Zero) return [];
 
-        // The result can be either a CFArray (match-limit-all) or a single
-        // CFDictionary (match-limit-one). We differentiate by trying to read
-        // as a dictionary first via a known key.
-        var attempt = CFDictionaryGetValue(arrayOrDict, Constants.KSecAttrService);
-        if (attempt != IntPtr.Zero)
+        // The result can be either a CFArray (match-limit-all, multiple items)
+        // or a single CFDictionary (match-limit-all + one result, or an older
+        // macOS quirk). Dispatch on CF type ID — probing a CFArray with
+        // CFDictionaryGetValue toll-free-bridges to [NSArray objectForKey:]
+        // which crashes the process.
+        var typeId = CFGetTypeID(arrayOrDict);
+        if (typeId == CFDictionaryGetTypeID())
         {
             var single = DecodeItem(arrayOrDict);
             return single is null ? [] : [single];
+        }
+
+        if (typeId != CFArrayGetTypeID())
+        {
+            // Unknown result type — safe fallback: treat as no results.
+            return [];
         }
 
         var count = CFArrayGetCount(arrayOrDict);

@@ -129,7 +129,8 @@ namespace NextIteration.SpectreConsole.Auth
             }
             return new LibsecretCredentialManager(
                 options.KeyringAppIdentifier,
-                sp.GetServices<ICredentialSummaryProvider>());
+                sp.GetServices<ICredentialSummaryProvider>(),
+                options.KeyringCollection);
         }
     }
 }
