@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.0] — 2026-04-18
+
+### Added
+- **`ICredentialManager.GetCredentialByIdAsync(providerName, accountId)`** — returns the decrypted JSON payload of a specific credential without mutating which credential is currently selected. The non-mutating counterpart to `GetSelectedCredentialAsync`. Implemented natively in all three built-in backends (`FileCredentialManager`, `KeychainCredentialManager`, `LibsecretCredentialManager`) via a single direct lookup — no select-then-read dance, no shared-state side effects.
+
+### Breaking changes
+- **`ICredentialManager` gains a required member** — `GetCredentialByIdAsync`. Consumers who have rolled their own `ICredentialManager` implementation need to add this method. (There are no default interface implementations; a no-op fallback was explicitly rejected to keep the contract honest.)
+
+### Motivation
+Consumers needed a way to read a specific stored credential's secret at runtime based on some lookup key — e.g. Mpt's `AuthenticationHelper` resolves an Adobe credential by externalId, and its `AccountsBridge.GetAll` enumerates SoftwareOne credentials when commands need ops+vendor pairs or source+dest pairs. Before 0.6.0 this required a "select credential X → read its decrypted JSON → restore the originally-selected credential" dance, which (a) leaked mutation into global state, (b) wasn't concurrency-safe, and (c) left an orphaned selection when there was no original active credential to restore. The new method makes all of that go away.
+
+### Tests
+- 14 new tests (6 File-backend, 4 Keychain, 4 Libsecret), all exercising: happy-path round-trip, unknown-id returns null, cross-provider isolation, and the core regression — **does not mutate the selected-credential state**. Suite now at 127 tests.
+
+---
+
 ## [0.5.0] — 2026-04-18
 
 ### Changed

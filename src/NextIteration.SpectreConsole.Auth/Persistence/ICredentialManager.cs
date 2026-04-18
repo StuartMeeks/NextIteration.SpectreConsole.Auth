@@ -47,6 +47,22 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
         Task<string?> GetSelectedCredentialAsync(string providerName);
 
         /// <summary>
+        /// Returns the decrypted JSON payload of a specific credential by
+        /// its account id, without changing which credential is currently
+        /// selected. Use this when you need to read a non-active credential
+        /// (e.g. to resolve one of several stored credentials at runtime by
+        /// some lookup key) — it's the non-mutating counterpart to
+        /// <see cref="GetSelectedCredentialAsync"/>.
+        /// </summary>
+        /// <param name="providerName">The provider (e.g. <c>Adobe</c>).</param>
+        /// <param name="accountId">The account id (GUID) returned by <see cref="AddCredentialAsync"/>.</param>
+        /// <returns>
+        /// The decrypted JSON payload, or <see langword="null"/> if no
+        /// credential with that account id exists for the given provider.
+        /// </returns>
+        Task<string?> GetCredentialByIdAsync(string providerName, string accountId);
+
+        /// <summary>
         /// Returns the set of provider names that currently have at least
         /// one stored credential.
         /// </summary>

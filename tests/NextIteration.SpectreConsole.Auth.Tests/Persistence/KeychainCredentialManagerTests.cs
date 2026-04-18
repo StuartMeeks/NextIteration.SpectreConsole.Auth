@@ -150,6 +150,59 @@ public sealed class KeychainCredentialManagerTests : IDisposable
     }
 
     [Fact]
+    public async Task GetCredentialByIdAsync_ReturnsDecryptedPayload_ForExistingAccount()
+    {
+        if (_skip) return;
+        var manager = NewManager();
+        var payload = "{\"apiKey\":\"super-secret\"}";
+        var accountId = await manager.AddCredentialAsync("Adobe", "prod", "Production", payload);
+
+        var decrypted = await manager.GetCredentialByIdAsync("Adobe", accountId);
+
+        Assert.Equal(payload, decrypted);
+    }
+
+    [Fact]
+    public async Task GetCredentialByIdAsync_ReturnsNull_ForUnknownAccountId()
+    {
+        if (_skip) return;
+        var manager = NewManager();
+        _ = await manager.AddCredentialAsync("Adobe", "prod", "Production", "{}");
+
+        var result = await manager.GetCredentialByIdAsync("Adobe", Guid.NewGuid().ToString());
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task GetCredentialByIdAsync_DoesNotMutateSelection()
+    {
+        if (_skip) return;
+        var manager = NewManager();
+        var selectedId = await manager.AddCredentialAsync("Adobe", "selected", "Production", "{\"a\":1}");
+        var otherId = await manager.AddCredentialAsync("Adobe", "other", "Production", "{\"b\":2}");
+        _ = await manager.SelectCredentialAsync(selectedId);
+
+        _ = await manager.GetCredentialByIdAsync("Adobe", otherId);
+
+        var listings = (await manager.ListCredentialsAsync("Adobe")).ToList();
+        Assert.True(listings.Single(c => c.AccountId == selectedId).IsSelected);
+        Assert.False(listings.Single(c => c.AccountId == otherId).IsSelected);
+    }
+
+    [Fact]
+    public async Task GetCredentialByIdAsync_ReturnsNull_WhenProviderMismatches()
+    {
+        if (_skip) return;
+        var manager = NewManager();
+        var adobeId = await manager.AddCredentialAsync("Adobe", "adobe-acct", "Production", "{}");
+
+        var result = await manager.GetCredentialByIdAsync("Airtable", adobeId);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
     public async Task DeleteCredentialAsync_RemovesCredential()
     {
         if (_skip) return;

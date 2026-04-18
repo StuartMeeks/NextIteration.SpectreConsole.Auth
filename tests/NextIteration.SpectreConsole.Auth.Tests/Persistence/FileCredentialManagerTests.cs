@@ -195,6 +195,85 @@ public sealed class FileCredentialManagerTests
     }
 
     [Fact]
+    public async Task GetCredentialByIdAsync_ReturnsDecryptedPayload_ForExistingAccount()
+    {
+        using var temp = new TempDir();
+        var manager = CreateManager(temp.Path);
+        var payload = "{\"apiKey\":\"super-secret\"}";
+        var accountId = await manager.AddCredentialAsync("Adobe", "prod", "Production", payload);
+
+        var decrypted = await manager.GetCredentialByIdAsync("Adobe", accountId);
+
+        Assert.Equal(payload, decrypted);
+    }
+
+    [Fact]
+    public async Task GetCredentialByIdAsync_ReturnsNull_ForUnknownAccountId()
+    {
+        using var temp = new TempDir();
+        var manager = CreateManager(temp.Path);
+        _ = await manager.AddCredentialAsync("Adobe", "prod", "Production", "{}");
+
+        var result = await manager.GetCredentialByIdAsync("Adobe", Guid.NewGuid().ToString());
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task GetCredentialByIdAsync_DoesNotMutateSelection()
+    {
+        // Regression: the whole reason this method exists is that consumers
+        // needed to read non-selected credentials without the old
+        // "select + read + restore" dance. Asserting the selection stays
+        // put is the core contract.
+        using var temp = new TempDir();
+        var manager = CreateManager(temp.Path);
+        var selectedId = await manager.AddCredentialAsync("Adobe", "selected", "Production", "{\"a\":1}");
+        var otherId = await manager.AddCredentialAsync("Adobe", "other", "Production", "{\"b\":2}");
+        _ = await manager.SelectCredentialAsync(selectedId);
+
+        _ = await manager.GetCredentialByIdAsync("Adobe", otherId);
+
+        var listings = (await manager.ListCredentialsAsync("Adobe")).ToList();
+        Assert.True(listings.Single(c => c.AccountId == selectedId).IsSelected);
+        Assert.False(listings.Single(c => c.AccountId == otherId).IsSelected);
+    }
+
+    [Fact]
+    public async Task GetCredentialByIdAsync_ReturnsNull_WhenProviderMismatches()
+    {
+        // Cross-provider isolation: an accountId belonging to provider X
+        // must not surface when queried against provider Y.
+        using var temp = new TempDir();
+        var manager = CreateManager(temp.Path);
+        var adobeId = await manager.AddCredentialAsync("Adobe", "adobe-acct", "Production", "{}");
+
+        var result = await manager.GetCredentialByIdAsync("Airtable", adobeId);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task GetCredentialByIdAsync_WithInvalidProviderName_Throws()
+    {
+        using var temp = new TempDir();
+        var manager = CreateManager(temp.Path);
+
+        await Assert.ThrowsAnyAsync<ArgumentException>(
+            () => manager.GetCredentialByIdAsync("   ", Guid.NewGuid().ToString()));
+    }
+
+    [Fact]
+    public async Task GetCredentialByIdAsync_WithInvalidAccountId_Throws()
+    {
+        using var temp = new TempDir();
+        var manager = CreateManager(temp.Path);
+
+        await Assert.ThrowsAnyAsync<ArgumentException>(
+            () => manager.GetCredentialByIdAsync("Adobe", "   "));
+    }
+
+    [Fact]
     public async Task DeleteCredentialAsync_RemovesFile()
     {
         using var temp = new TempDir();

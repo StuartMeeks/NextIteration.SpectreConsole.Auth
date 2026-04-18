@@ -192,9 +192,30 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
                 return null;
             }
 
-            // Filename is deterministic given provider + accountId, so we can
-            // read the one file directly rather than scanning the directory.
-            var fileName = $"{providerName.ToLowerInvariant()}_{selectedId}.json";
+            return await ReadAndDecryptByIdAsync(providerName, selectedId).ConfigureAwait(false);
+        }
+
+        /// <inheritdoc />
+        public async Task<string?> GetCredentialByIdAsync(string providerName, string accountId)
+        {
+            ValidateProviderName(providerName);
+            ArgumentException.ThrowIfNullOrWhiteSpace(accountId);
+
+            return await ReadAndDecryptByIdAsync(providerName, accountId).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Reads and decrypts a specific credential file by its deterministic
+        /// <c>{provider}_{accountId}.json</c> path. Returns <see langword="null"/>
+        /// when the file doesn't exist or its contents don't round-trip
+        /// through the JSON + encryption layers. Shared by
+        /// <see cref="GetSelectedCredentialAsync"/> (which first resolves
+        /// the account id from <c>selections.json</c>) and
+        /// <see cref="GetCredentialByIdAsync"/> (which takes it directly).
+        /// </summary>
+        private async Task<string?> ReadAndDecryptByIdAsync(string providerName, string accountId)
+        {
+            var fileName = $"{providerName.ToLowerInvariant()}_{accountId}.json";
             var filePath = Path.Combine(_credentialsDirectory, fileName);
             if (!File.Exists(filePath))
             {

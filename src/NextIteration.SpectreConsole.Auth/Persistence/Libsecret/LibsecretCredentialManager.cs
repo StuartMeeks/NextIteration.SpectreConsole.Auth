@@ -193,15 +193,33 @@ public sealed class LibsecretCredentialManager : ICredentialManager
         var selectedId = ReadSelection(providerName);
         if (selectedId is null) return Task.FromResult<string?>(null);
 
-        var password = LookupPassword(new Dictionary<string, string>(StringComparer.Ordinal)
+        return Task.FromResult(LookupCredentialByAccountId(providerName, selectedId));
+    }
+
+    /// <inheritdoc />
+    public Task<string?> GetCredentialByIdAsync(string providerName, string accountId)
+    {
+        ValidateProviderName(providerName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(accountId);
+
+        return Task.FromResult(LookupCredentialByAccountId(providerName, accountId));
+    }
+
+    /// <summary>
+    /// Secret Service lookup keyed on <c>(app, kind=credential, provider,
+    /// account)</c>. Shared by <see cref="GetSelectedCredentialAsync"/>
+    /// and <see cref="GetCredentialByIdAsync"/> — neither modifies the
+    /// selection record.
+    /// </summary>
+    private string? LookupCredentialByAccountId(string providerName, string accountId)
+    {
+        return LookupPassword(new Dictionary<string, string>(StringComparer.Ordinal)
         {
             [AttrApp] = _appIdentifier,
             [AttrKind] = KindCredential,
             [AttrProvider] = providerName,
-            [AttrAccount] = selectedId,
+            [AttrAccount] = accountId,
         });
-
-        return Task.FromResult(password);
     }
 
     /// <inheritdoc />

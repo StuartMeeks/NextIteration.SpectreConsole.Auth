@@ -153,12 +153,32 @@ public sealed class KeychainCredentialManager : ICredentialManager
         if (selectedId is null)
             return Task.FromResult<string?>(null);
 
-        var service = ServiceFor(providerName);
-        var item = QuerySingleItem(service, selectedId, includeData: true);
-        if (item is null || item.Data is null)
-            return Task.FromResult<string?>(null);
+        return Task.FromResult(ReadItemDataById(providerName, selectedId));
+    }
 
-        return Task.FromResult<string?>(Encoding.UTF8.GetString(item.Data));
+    /// <inheritdoc />
+    public Task<string?> GetCredentialByIdAsync(string providerName, string accountId)
+    {
+        ValidateProviderName(providerName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(accountId);
+
+        return Task.FromResult(ReadItemDataById(providerName, accountId));
+    }
+
+    /// <summary>
+    /// Loads a generic-password Keychain item's <c>kSecValueData</c> for
+    /// the given provider and account id. Returns <see langword="null"/>
+    /// when the item doesn't exist or has no payload. Shared by
+    /// <see cref="GetSelectedCredentialAsync"/> and
+    /// <see cref="GetCredentialByIdAsync"/> — neither touches the
+    /// selection record.
+    /// </summary>
+    private string? ReadItemDataById(string providerName, string accountId)
+    {
+        var service = ServiceFor(providerName);
+        var item = QuerySingleItem(service, accountId, includeData: true);
+        if (item is null || item.Data is null) return null;
+        return Encoding.UTF8.GetString(item.Data);
     }
 
     /// <inheritdoc />
