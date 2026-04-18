@@ -354,6 +354,12 @@ When contributing code, please keep the zero-warning, fully-documented public su
 
 ---
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for release notes.
+
+---
+
 ## License
 
 [MIT](LICENSE) © Stuart Meeks
