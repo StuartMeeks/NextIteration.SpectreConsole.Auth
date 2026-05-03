@@ -56,7 +56,10 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: nuget-package
-          path: ./artifacts/*.nupkg
+          # Capture both .nupkg and .snupkg so the publish job's
+          # `dotnet nuget push *.nupkg` can also push the matching
+          # symbol package next to it.
+          path: ./artifacts/*nupkg
 
   # Keychain backend is macOS-only. This job runs the same test suite on a
   # real macOS runner so the Keychain tests actually exercise
