@@ -63,7 +63,7 @@ namespace NextIteration.SpectreConsole.Auth.Commands
 
                 if (!_collectorsByProvider.TryGetValue(settings.Provider, out var collector))
                 {
-                    AnsiConsole.MarkupLine($"[red]Unknown provider: {settings.Provider}[/]");
+                    AnsiConsole.MarkupLine($"[red]Unknown provider: {Markup.Escape(settings.Provider)}[/]");
                     return 1;
                 }
 

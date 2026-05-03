@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.1] — 2026-05-03
+
+### Fixed
+- **Markup injection in `accounts` command output** — provider names, account names, environments, summary `DisplayFields`, exception messages, and the `--provider` flag echoed in the "Unknown provider" error now flow through `Markup.Escape` before reaching `MarkupLine` / `Table.AddRow` / Spectre selection prompts. A credential whose name happened to contain `[` or `]` previously corrupted the `accounts list` table rendering, and exception messages with markup-looking content (common on `JsonException` / IO errors) garbled the error line in `CommandErrorReporter`.
+- **`accounts delete <short-id>` crash** — `accounts delete abc` (or any non-GUID id shorter than 8 chars) previously threw `ArgumentOutOfRangeException` on the `accountId[..8]` slice in the confirm prompt before reaching "not found". A new `CommandFormatting.ShortId` helper safely abbreviates, and `DeleteCredentialAsync` / `SelectCredentialAsync` / `GetCredentialByIdAsync` now validate that `accountId` is a GUID before any filesystem call. Non-GUIDs resolve to deterministic `false` on the mutating APIs and `ArgumentException` on the strict `GetCredentialByIdAsync`. Closes a path-traversal/glob-injection vector where `*` or `..\..\foo` could have flowed into `Path.Combine` and `Directory.GetFiles` patterns.
+- **Concurrent `accounts select` lost updates** — `selections.json` was read-modify-written without serialization, so two CLI invocations modifying different providers could lose one provider's update. Reads/writes now happen under a cross-process advisory lock backed by `selections.json.lock` (`FileShare.None` + `FileOptions.DeleteOnClose` + exponential backoff up to ~5s). Atomic rename was already preventing torn files; this closes the lost-update window. The Keychain and libsecret backends are unaffected — both OS stores serialise their own writes.
+- **Unbalanced parenthesis in `accounts select` and `accounts delete` choice prompts** — drive-by fix while replacing the unsafe `[..8]` slices.
+
+### Changed
+- **`PackageOutputPath`** — was hard-coded as `C:\nuget-local\`, which on Linux produced surprising `src/NextIteration.SpectreConsole.Auth/C:/nuget-local/…` repo churn. Now repo-relative (`$(MSBuildThisFileDirectory)..\..\artifacts\packages`) and already gitignored.
+- **`GeneratePackageOnBuild`** — now scoped to `Release` builds via MSBuild condition. `dotnet test` and Debug builds no longer pack, materially shortening the local test loop.
+
+### Tests
+- 18 new tests; suite now at 145.
+  - `CommandFormatting.ShortId` across full GUIDs, short strings, exact-8 boundary, null/empty.
+  - Non-GUID `accountId` resolves to deterministic not-found on file-backend `Delete`/`Select`; throws on `GetCredentialByIdAsync`.
+  - Concurrent `SelectCredentialAsync` on different providers both persist (regression test for the `selections.json` race).
+  - `SelectionsLock` uncontended/contended/post-release semantics.
+
+---
+
 ## [0.6.0] — 2026-04-18
 
 ### Added
@@ -79,6 +100,7 @@ Consumers needed a way to read a specific stored credential's secret at runtime 
 - SourceLink, deterministic builds, embedded symbols, published symbol packages.
 - `TreatWarningsAsErrors=true`, `AnalysisLevel=latest` — zero-warning public API.
 
+[0.6.1]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/releases/tag/v0.6.1
 [0.5.0]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/releases/tag/v0.5.0
 [0.4.2]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/releases/tag/v0.4.2
 [0.4.1]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/releases/tag/v0.4.1

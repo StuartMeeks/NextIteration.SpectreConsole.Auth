@@ -52,7 +52,7 @@ namespace NextIteration.SpectreConsole.Auth.Commands
                     }
 
                     var choices = allCredentials.Select(c =>
-                        $"{c.AccountName} ({c.ProviderName} - {c.AccountId[..8]}... {(c.IsSelected ? "[green](selected)[/]" : "")}").ToArray();
+                        $"{Markup.Escape(c.AccountName)} ({Markup.Escape(c.ProviderName)} - {CommandFormatting.ShortId(c.AccountId)}) {(c.IsSelected ? "[green](selected)[/]" : "")}").ToArray();
 
                     var selectedChoice = await AnsiConsole.PromptAsync(new SelectionPrompt<string>()
                             .Title("Select credential to [green]activate[/]:")

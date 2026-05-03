@@ -74,7 +74,7 @@ namespace NextIteration.SpectreConsole.Auth.Commands
 
             if (credentials.Count == 0)
             {
-                AnsiConsole.MarkupLine($"[yellow]No credentials found for provider '{provider}'.[/]");
+                AnsiConsole.MarkupLine($"[yellow]No credentials found for provider '{Markup.Escape(provider)}'.[/]");
                 return;
             }
 
@@ -94,7 +94,7 @@ namespace NextIteration.SpectreConsole.Auth.Commands
                 }
             }
 
-            AnsiConsole.MarkupLine($"[bold]{provider}[/]");
+            AnsiConsole.MarkupLine($"[bold]{Markup.Escape(provider)}[/]");
 
             var table = new Table();
             _ = table.AddColumn("ID");
@@ -109,18 +109,21 @@ namespace NextIteration.SpectreConsole.Auth.Commands
 
             foreach (var credential in credentials)
             {
+                // Cells render via Spectre markup, so user/provider-controlled
+                // values must be escaped — an account name like "[red]X[/]"
+                // would otherwise be parsed as styling rather than text.
                 var row = new List<string>
                 {
-                    credential.AccountId[..8] + "...",
-                    credential.AccountName,
-                    credential.Environment,
+                    CommandFormatting.ShortId(credential.AccountId),
+                    Markup.Escape(credential.AccountName),
+                    Markup.Escape(credential.Environment),
                 };
 
                 foreach (var key in displayFieldKeys)
                 {
                     var value = credential.DisplayFields
                         .FirstOrDefault(kvp => string.Equals(kvp.Key, key, StringComparison.OrdinalIgnoreCase));
-                    row.Add(value.Value ?? string.Empty);
+                    row.Add(Markup.Escape(value.Value ?? string.Empty));
                 }
 
                 row.Add(credential.CreatedAt.ToString("yyyy-MM-dd HH:mm"));

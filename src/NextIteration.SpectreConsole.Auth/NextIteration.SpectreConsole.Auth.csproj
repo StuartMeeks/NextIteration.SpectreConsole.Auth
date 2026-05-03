@@ -17,11 +17,11 @@
 
 	<PropertyGroup>
 		<PackageId>NextIteration.SpectreConsole.Auth</PackageId>
-		<Version>0.6.0</Version>
+		<Version>0.6.1</Version>
 		<Authors>Stuart Meeks</Authors>
 		<Description>Credential storage, encryption, and Spectre.Console CLI commands for managing provider credentials in CLI tools.</Description>
-		<GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-		<PackageOutputPath>C:\nuget-local\</PackageOutputPath>
+		<GeneratePackageOnBuild Condition="'$(Configuration)' == 'Release'">true</GeneratePackageOnBuild>
+		<PackageOutputPath>$(MSBuildThisFileDirectory)..\..\artifacts\packages</PackageOutputPath>
 		<IncludeBuildOutput>true</IncludeBuildOutput>
 		<PackageLicenseExpression>MIT</PackageLicenseExpression>
 		<PackageReadmeFile>README.md</PackageReadmeFile>

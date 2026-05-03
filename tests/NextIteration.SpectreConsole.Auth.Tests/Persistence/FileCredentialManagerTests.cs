@@ -434,6 +434,72 @@ public sealed class FileCredentialManagerTests
         Assert.Equal("{\"key\":\"v\"}", await second.GetSelectedCredentialAsync("Adobe"));
     }
 
+    [Theory]
+    [InlineData("not-a-guid")]
+    [InlineData("../etc/passwd")]
+    [InlineData("*")]
+    [InlineData("abc")]
+    public async Task DeleteCredentialAsync_NonGuidId_ReturnsFalseWithoutThrowing(string accountId)
+    {
+        using var temp = new TempDir();
+        var manager = CreateManager(temp.Path);
+        _ = await manager.AddCredentialAsync("Adobe", "prod", "Production", "{}");
+
+        // Malformed ids must not flow into Path.Combine / Directory.GetFiles
+        // glob — they should resolve to a clean "not found".
+        var result = await manager.DeleteCredentialAsync(accountId);
+
+        Assert.False(result);
+    }
+
+    [Theory]
+    [InlineData("not-a-guid")]
+    [InlineData("../etc/passwd")]
+    [InlineData("*")]
+    public async Task SelectCredentialAsync_NonGuidId_ReturnsFalseWithoutThrowing(string accountId)
+    {
+        using var temp = new TempDir();
+        var manager = CreateManager(temp.Path);
+        _ = await manager.AddCredentialAsync("Adobe", "prod", "Production", "{}");
+
+        var result = await manager.SelectCredentialAsync(accountId);
+
+        Assert.False(result);
+    }
+
+    [Fact]
+    public async Task GetCredentialByIdAsync_NonGuidId_Throws()
+    {
+        using var temp = new TempDir();
+        var manager = CreateManager(temp.Path);
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => manager.GetCredentialByIdAsync("Adobe", "not-a-guid"));
+    }
+
+    [Fact]
+    public async Task SelectCredentialAsync_ConcurrentDifferentProviders_BothPersist()
+    {
+        using var temp = new TempDir();
+        var manager = CreateManager(temp.Path);
+
+        var adobeId = await manager.AddCredentialAsync("Adobe", "a", "Production", "{}");
+        var airtableId = await manager.AddCredentialAsync("Airtable", "b", "Production", "{}");
+
+        // Without the selections lock both calls would read the same
+        // pre-write snapshot, mutate their own provider's entry, then both
+        // save — last writer wins and one update is lost. With the lock
+        // both updates must be observable afterwards.
+        await Task.WhenAll(
+            manager.SelectCredentialAsync(adobeId),
+            manager.SelectCredentialAsync(airtableId));
+
+        var adobe = (await manager.ListCredentialsAsync("Adobe")).Single();
+        var airtable = (await manager.ListCredentialsAsync("Airtable")).Single();
+        Assert.True(adobe.IsSelected);
+        Assert.True(airtable.IsSelected);
+    }
+
     /// <summary>
     /// Minimal summary provider used only to verify that
     /// <see cref="FileCredentialManager.ListCredentialsAsync"/> routes
