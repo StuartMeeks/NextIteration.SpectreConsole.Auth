@@ -51,7 +51,7 @@ namespace NextIteration.SpectreConsole.Auth.Commands
                     }
 
                     var choices = allCredentials.Select(c =>
-                        $"{c.AccountName} ({c.ProviderName} - {c.AccountId[..8]}...").ToArray();
+                        $"{Markup.Escape(c.AccountName)} ({Markup.Escape(c.ProviderName)} - {CommandFormatting.ShortId(c.AccountId)})").ToArray();
 
                     var selectedChoice = await AnsiConsole.PromptAsync(
                         new SelectionPrompt<string>()
@@ -63,7 +63,7 @@ namespace NextIteration.SpectreConsole.Auth.Commands
                 }
 
                 // Confirm deletion
-                if (!settings.Force && !await AnsiConsole.ConfirmAsync($"Are you sure you want to delete credential '{accountId[..8]}...'?", cancellationToken: cancellationToken).ConfigureAwait(false))
+                if (!settings.Force && !await AnsiConsole.ConfirmAsync($"Are you sure you want to delete credential '{Markup.Escape(CommandFormatting.ShortId(accountId))}'?", cancellationToken: cancellationToken).ConfigureAwait(false))
                 {
                     AnsiConsole.MarkupLine("[yellow]Deletion cancelled.[/]");
                     return 0;

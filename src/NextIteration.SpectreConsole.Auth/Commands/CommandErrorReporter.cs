@@ -18,14 +18,19 @@ namespace NextIteration.SpectreConsole.Auth.Commands
         /// </summary>
         internal static void Report(Exception ex, string contextMessage, bool verbose)
         {
+            // contextMessage is library-internal today, but escape defensively
+            // so a future caller passing user-derived text can't break the line.
+            // ex.Message is always external — JSON parse errors, IO errors, etc.
+            // commonly contain '[' / ']' which Spectre would otherwise interpret
+            // as malformed markup.
             if (verbose)
             {
-                AnsiConsole.MarkupLine($"[red]{contextMessage}[/]");
+                AnsiConsole.MarkupLine($"[red]{Markup.Escape(contextMessage)}[/]");
                 AnsiConsole.WriteException(ex, ExceptionFormats.ShortenEverything);
             }
             else
             {
-                AnsiConsole.MarkupLine($"[red]{contextMessage}: {ex.Message}[/]");
+                AnsiConsole.MarkupLine($"[red]{Markup.Escape(contextMessage)}: {Markup.Escape(ex.Message)}[/]");
                 AnsiConsole.MarkupLine("[grey]Run with --verbose for more detail.[/]");
             }
         }

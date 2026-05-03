@@ -20,6 +20,7 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
 
         private readonly string _credentialsDirectory;
         private readonly string _selectionFile;
+        private readonly string _selectionLockFile;
         private readonly ICredentialEncryption _encryption;
         private readonly Dictionary<string, ICredentialSummaryProvider> _summaryProviders;
 
@@ -41,6 +42,7 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
             _encryption = encryption;
             _credentialsDirectory = credentialsDirectory;
             _selectionFile = Path.Combine(_credentialsDirectory, "selections.json");
+            _selectionLockFile = Path.Combine(_credentialsDirectory, "selections.json.lock");
             _summaryProviders = (summaryProviders ?? [])
                 .ToDictionary(p => p.ProviderName, StringComparer.OrdinalIgnoreCase);
 
@@ -144,6 +146,8 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
         /// <inheritdoc />
         public async Task<bool> DeleteCredentialAsync(string accountId)
         {
+            if (!IsValidAccountId(accountId)) return false;
+
             var found = await FindCredentialByAccountIdAsync(accountId).ConfigureAwait(false);
             if (found is null)
             {
@@ -153,7 +157,9 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
             var (filePath, credential) = found.Value;
             File.Delete(filePath);
 
-            // Remove the selection entry if it pointed at this credential.
+            // Hold the selections lock across load+modify+save so a concurrent
+            // select/delete on a different provider can't lose its update.
+            using var selectionsLock = await SelectionsLock.AcquireAsync(_selectionLockFile).ConfigureAwait(false);
             var selections = await LoadSelectionsAsync().ConfigureAwait(false);
             if (selections.TryGetValue(credential.ProviderName, out var selectedId) &&
                 selectedId.Equals(accountId, StringComparison.OrdinalIgnoreCase))
@@ -168,6 +174,8 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
         /// <inheritdoc />
         public async Task<bool> SelectCredentialAsync(string accountId)
         {
+            if (!IsValidAccountId(accountId)) return false;
+
             var found = await FindCredentialByAccountIdAsync(accountId).ConfigureAwait(false);
             if (found is null)
             {
@@ -175,6 +183,7 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
             }
 
             var credential = found.Value.Credential;
+            using var selectionsLock = await SelectionsLock.AcquireAsync(_selectionLockFile).ConfigureAwait(false);
             var selections = await LoadSelectionsAsync().ConfigureAwait(false);
             selections[credential.ProviderName] = accountId;
             await SaveSelectionsAsync(selections).ConfigureAwait(false);
@@ -187,8 +196,11 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
             ValidateProviderName(providerName);
 
             var selections = await LoadSelectionsAsync().ConfigureAwait(false);
-            if (!selections.TryGetValue(providerName, out var selectedId))
+            if (!selections.TryGetValue(providerName, out var selectedId) || !IsValidAccountId(selectedId))
             {
+                // A non-GUID id can only land here via tampered selections.json;
+                // treat it as "no selection" rather than letting a malformed
+                // string flow into Path.Combine.
                 return null;
             }
 
@@ -199,7 +211,7 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
         public async Task<string?> GetCredentialByIdAsync(string providerName, string accountId)
         {
             ValidateProviderName(providerName);
-            ArgumentException.ThrowIfNullOrWhiteSpace(accountId);
+            ValidateAccountId(accountId);
 
             return await ReadAndDecryptByIdAsync(providerName, accountId).ConfigureAwait(false);
         }
@@ -311,6 +323,31 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
                         $"Provider name '{providerName}' contains invalid characters. Allowed: ASCII letters, digits, '.', '_', '-'.",
                         nameof(providerName));
                 }
+            }
+        }
+
+        /// <summary>
+        /// Library-generated account ids are always GUIDs. Caller-supplied
+        /// strings are constrained to that shape so they can't smuggle glob
+        /// metacharacters (<c>*</c>, <c>?</c>) or path-traversal segments
+        /// (<c>..</c>) into the file lookups.
+        /// </summary>
+        private static bool IsValidAccountId(string? accountId) =>
+            !string.IsNullOrWhiteSpace(accountId) && Guid.TryParse(accountId, out _);
+
+        /// <summary>
+        /// Throwing variant of <see cref="IsValidAccountId"/> used at API
+        /// boundaries where a malformed id is a programmer error rather than
+        /// a "not found" condition.
+        /// </summary>
+        private static void ValidateAccountId(string accountId)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(accountId);
+            if (!Guid.TryParse(accountId, out _))
+            {
+                throw new ArgumentException(
+                    $"Account id '{accountId}' is not a valid GUID.",
+                    nameof(accountId));
             }
         }
 

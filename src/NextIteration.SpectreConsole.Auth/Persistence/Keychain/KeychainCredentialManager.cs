@@ -110,6 +110,8 @@ public sealed class KeychainCredentialManager : ICredentialManager
     /// <inheritdoc />
     public Task<bool> DeleteCredentialAsync(string accountId)
     {
+        if (!IsValidAccountId(accountId)) return Task.FromResult(false);
+
         var match = FindItemByAccountId(accountId);
         if (match is null)
             return Task.FromResult(false);
@@ -133,6 +135,8 @@ public sealed class KeychainCredentialManager : ICredentialManager
     /// <inheritdoc />
     public Task<bool> SelectCredentialAsync(string accountId)
     {
+        if (!IsValidAccountId(accountId)) return Task.FromResult(false);
+
         var match = FindItemByAccountId(accountId);
         if (match is null)
             return Task.FromResult(false);
@@ -160,7 +164,7 @@ public sealed class KeychainCredentialManager : ICredentialManager
     public Task<string?> GetCredentialByIdAsync(string providerName, string accountId)
     {
         ValidateProviderName(providerName);
-        ArgumentException.ThrowIfNullOrWhiteSpace(accountId);
+        ValidateAccountId(accountId);
 
         return Task.FromResult(ReadItemDataById(providerName, accountId));
     }
@@ -281,6 +285,20 @@ public sealed class KeychainCredentialManager : ICredentialManager
                     $"Provider name '{providerName}' contains invalid characters. Allowed: ASCII letters, digits, '.', '_', '-'.",
                     nameof(providerName));
             }
+        }
+    }
+
+    private static bool IsValidAccountId(string? accountId) =>
+        !string.IsNullOrWhiteSpace(accountId) && Guid.TryParse(accountId, out _);
+
+    private static void ValidateAccountId(string accountId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(accountId);
+        if (!Guid.TryParse(accountId, out _))
+        {
+            throw new ArgumentException(
+                $"Account id '{accountId}' is not a valid GUID.",
+                nameof(accountId));
         }
     }
 
