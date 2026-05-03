@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.2] — 2026-05-03
+
+### Changed
+
+- **Symbol packaging.** Switched `<DebugType>` from `embedded` to `portable`
+  so the published `.snupkg` actually contains `.pdb` files. The previous
+  combination produced an empty `.snupkg`; nuget.org rejects empty symbol
+  packages with HTTP 400. Until now the workflow's `upload-artifact`
+  filter (`*.nupkg`) silently dropped the broken symbol package on its
+  way to the publish job, so the failure stayed invisible — but no
+  symbols ever reached nuget.org's symbol server. Consumers debugging
+  into the library now get sources via the symbol server out of the box.
+- **CI artifact path.** `upload-artifact` now captures `*nupkg` (both
+  `.nupkg` and `.snupkg`) so the publish job pushes both files.
+
+---
+
 ## [0.6.1] — 2026-05-03
 
 ### Fixed
@@ -100,6 +117,7 @@ Consumers needed a way to read a specific stored credential's secret at runtime 
 - SourceLink, deterministic builds, embedded symbols, published symbol packages.
 - `TreatWarningsAsErrors=true`, `AnalysisLevel=latest` — zero-warning public API.
 
+[0.6.2]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/releases/tag/v0.6.2
 [0.6.1]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/releases/tag/v0.6.1
 [0.5.0]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/releases/tag/v0.5.0
 [0.4.2]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/releases/tag/v0.4.2
