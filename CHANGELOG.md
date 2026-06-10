@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.3] — 2026-06-10
+
+### Changed
+
+- **Dependency updates.** Bumped `Microsoft.Extensions.DependencyInjection.Abstractions`,
+  `Microsoft.Extensions.Http`, and `System.Security.Cryptography.ProtectedData`
+  to `10.0.9`; `Spectre.Console` to `0.56.0`; and `Microsoft.SourceLink.GitHub`
+  to `10.0.300`. Test-only dependencies updated as well
+  (`Microsoft.NET.Test.Sdk` `18.6.0`, `xunit` `2.9.3`,
+  `xunit.runner.visualstudio` `3.1.5`, `coverlet.collector` `10.0.1`).
+  `Spectre.Console.Cli` stays at `0.55.0` (latest stable). No public API change.
+- **NuGet trusted publishing.** The `publish` CI job now uses OIDC-based
+  [trusted publishing](https://learn.microsoft.com/nuget/nuget-org/trusted-publishing):
+  it exchanges the GitHub OIDC token for a short-lived nuget.org API key via
+  `NuGet/login@v1` instead of a long-lived `NUGET_API_KEY` secret.
+
+---
+
 ## [0.6.2] — 2026-05-03
 
 ### Changed
