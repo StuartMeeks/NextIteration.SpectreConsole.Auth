@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.7.0] — 2026-06-20
+
+### Added
+
+- **Multi-targeting `net8.0` and `net10.0`.** The package now ships assemblies for
+  both `net8.0` (current LTS) and `net10.0`, so consumers no longer need the newest
+  runtime to take a dependency. All dependencies already provide `net8.0` assets, so
+  the dependency graph is unchanged. The only source adjustment was swapping the
+  `net9.0+` `System.Threading.Lock` used to guard libsecret symbol resolution for a
+  plain `object` lock; behaviour is identical. No public API change.
+
+---
+
 ## [0.6.3] — 2026-06-10
 
 ### Changed
@@ -135,6 +148,8 @@ Consumers needed a way to read a specific stored credential's secret at runtime 
 - SourceLink, deterministic builds, embedded symbols, published symbol packages.
 - `TreatWarningsAsErrors=true`, `AnalysisLevel=latest` — zero-warning public API.
 
+[0.7.0]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/releases/tag/v0.7.0
+[0.6.3]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/releases/tag/v0.6.3
 [0.6.2]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/releases/tag/v0.6.2
 [0.6.1]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/releases/tag/v0.6.1
 [0.5.0]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/releases/tag/v0.5.0
