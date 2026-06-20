@@ -309,7 +309,7 @@ internal static partial class LibsecretInterop
 
     private static readonly Dictionary<string, IntPtr> _libraryHandles = [];
     private static readonly Dictionary<string, IntPtr> _symbolCache = [];
-    private static readonly Lock _resolveLock = new();
+    private static readonly object _resolveLock = new();
 
     private static IntPtr ResolveExport(string library, string symbolName)
     {
