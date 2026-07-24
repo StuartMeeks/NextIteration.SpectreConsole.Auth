@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.7.1] — 2026-07-24
+
+### Changed
+
+- **Per-target-framework dependency floors.** A `PackageReference` version in a
+  library is a *minimum floor* NuGet forces on every consumer, so flooring the
+  runtime-aligned Microsoft platform packages at a single `10.0.x` dragged
+  `net8.0` (LTS) consumers off their own `8.0.x` servicing line. Each target now
+  floors at its aligned major: the `net8.0` build floors
+  `Microsoft.Extensions.DependencyInjection.Abstractions` at `8.0.2`,
+  `Microsoft.Extensions.Http` at `8.0.1`, and
+  `System.Security.Cryptography.ProtectedData` at `8.0.0`; the `net10.0` build
+  floors all three at `10.0.10`. No public API change.
+- **Dependency updates.** Bumped `Spectre.Console` to `0.57.2` and
+  `Microsoft.SourceLink.GitHub` to `10.0.301`; test-only `Microsoft.NET.Test.Sdk`
+  to `18.8.1`. `Spectre.Console.Cli` stays at `0.55.0` (latest stable).
+
+---
+
 ## [0.7.0] — 2026-06-20
 
 ### Added
