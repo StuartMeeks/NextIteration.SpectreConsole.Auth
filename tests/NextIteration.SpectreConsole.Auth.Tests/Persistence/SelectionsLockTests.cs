@@ -13,7 +13,7 @@ public sealed class SelectionsLockTests
         using var temp = new TempDir();
         var lockPath = Path.Combine(temp.Path, "selections.json.lock");
 
-        using var held = await SelectionsLock.AcquireAsync(lockPath);
+        using var held = await SelectionsLock.AcquireAsync(lockPath, TestContext.Current.CancellationToken);
 
         // Successful acquisition is the assertion; we'd hit the IOException
         // path below if the contract were broken.
@@ -26,21 +26,21 @@ public sealed class SelectionsLockTests
         using var temp = new TempDir();
         var lockPath = Path.Combine(temp.Path, "selections.json.lock");
 
-        var first = await SelectionsLock.AcquireAsync(lockPath);
+        var first = await SelectionsLock.AcquireAsync(lockPath, TestContext.Current.CancellationToken);
 
         // Kick off a contender — it should park inside the backoff loop until
         // we dispose the holder, then proceed.
-        var contender = SelectionsLock.AcquireAsync(lockPath);
+        var contender = SelectionsLock.AcquireAsync(lockPath, TestContext.Current.CancellationToken);
 
         // Give the contender a moment to land inside its retry loop, then
         // release. If the lock semantics are broken the contender would have
         // already completed by now.
-        await Task.Delay(50);
+        await Task.Delay(50, TestContext.Current.CancellationToken);
         Assert.False(contender.IsCompleted, "contender completed while lock was held");
 
         first.Dispose();
 
-        using var second = await contender.WaitAsync(TimeSpan.FromSeconds(5));
+        using var second = await contender.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
         Assert.NotNull(second);
     }
 
@@ -50,12 +50,12 @@ public sealed class SelectionsLockTests
         using var temp = new TempDir();
         var lockPath = Path.Combine(temp.Path, "selections.json.lock");
 
-        (await SelectionsLock.AcquireAsync(lockPath)).Dispose();
+        (await SelectionsLock.AcquireAsync(lockPath, TestContext.Current.CancellationToken)).Dispose();
 
         // DeleteOnClose should clean up the sentinel file when the holder
         // disposes; a fresh acquirer must succeed without seeing a stale
         // lock.
-        using var second = await SelectionsLock.AcquireAsync(lockPath);
+        using var second = await SelectionsLock.AcquireAsync(lockPath, TestContext.Current.CancellationToken);
         Assert.NotNull(second);
     }
 }

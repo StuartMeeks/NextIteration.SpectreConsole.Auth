@@ -124,12 +124,12 @@ public sealed class LibsecretCredentialManagerTests : IDisposable
 
         var list = (await manager.ListCredentialsAsync("Adobe")).ToList();
 
-        Assert.Single(list);
-        Assert.Equal(accountId, list[0].AccountId);
-        Assert.Equal("prod", list[0].AccountName);
-        Assert.Equal("Adobe", list[0].ProviderName);
-        Assert.Equal("Production", list[0].Environment);
-        Assert.False(list[0].IsSelected);
+        var credential = Assert.Single(list);
+        Assert.Equal(accountId, credential.AccountId);
+        Assert.Equal("prod", credential.AccountName);
+        Assert.Equal("Adobe", credential.ProviderName);
+        Assert.Equal("Production", credential.Environment);
+        Assert.False(credential.IsSelected);
     }
 
     [Fact]
@@ -354,10 +354,10 @@ public sealed class LibsecretCredentialManagerTests : IDisposable
         _ = await manager.AddCredentialAsync("Adobe", "prod", "Production", "{\"apiKey\":\"xyz\"}");
         var list = (await manager.ListCredentialsAsync("Adobe")).ToList();
 
-        Assert.Single(list);
-        Assert.Single(list[0].DisplayFields);
-        Assert.Equal("Fingerprint", list[0].DisplayFields[0].Key);
-        Assert.Equal("xyz", list[0].DisplayFields[0].Value);
+        var credential = Assert.Single(list);
+        var field = Assert.Single(credential.DisplayFields);
+        Assert.Equal("Fingerprint", field.Key);
+        Assert.Equal("xyz", field.Value);
     }
 
     private sealed class FakeAdobeSummaryProvider : ICredentialSummaryProvider
