@@ -11,6 +11,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Migrated the test suite from xUnit.net v2 to v3.** `xunit` `2.9.3` was
+  flagged deprecated ("Legacy") on NuGet and `2.9.3` is the terminal v2 release,
+  so no further fixes were coming. Replaced it with `xunit.v3` `4.0.0`. Note the
+  package id keeps the `.v3` suffix while its *version* is now `4.0.0` — there is
+  no `xunit.v4` package. Test-project-only; no public API or packaging change.
+  - The test project is now `<OutputType>Exe</OutputType>`, which v3 requires
+    (its targets hard-error otherwise); the runner generates the entry point.
+  - xUnit.net v3 builds on Microsoft.Testing.Platform (MTP), and the .NET 10 SDK
+    refuses to run MTP test projects through the legacy VSTest target. A root
+    `global.json` opts `dotnet test` into the MTP runner. The CI `dotnet test`
+    invocation is unchanged.
+  - Dropped `Microsoft.NET.Test.Sdk`, `xunit.runner.visualstudio`, and
+    `coverlet.collector`: all three are VSTest-only and MTP replaces the runner
+    entirely. Coverage was never actually collected (no `--collect` anywhere in
+    CI or scripts), so nothing regressed; if coverage is wanted later, the MTP
+    equivalent is `Microsoft.Testing.Extensions.CodeCoverage`.
+  - Fixed 30 new `xunit.analyzers` 2.0.0 findings surfaced by v3, which
+    `TreatWarningsAsErrors` promotes to errors: 15 × `xUnit2033` (use
+    `Assert.Single`'s return value instead of re-indexing `[0]`) and 15 ×
+    `xUnit1051` (thread `TestContext.Current.CancellationToken` into calls that
+    accept one, so cancellation is responsive).
+
 - **Dependency updates (no consumer impact).** Bumped `Microsoft.SourceLink.GitHub`
   to `10.0.400`; test-only `Microsoft.NET.Test.Sdk` to `18.9.0` and
   `xunit.runner.visualstudio` to `4.0.0`. SourceLink is referenced with

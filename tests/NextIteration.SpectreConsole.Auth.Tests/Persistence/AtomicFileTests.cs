@@ -15,7 +15,7 @@ public sealed class AtomicFileTests
 
         await AtomicFile.WriteAllTextAsync(target, "hello");
 
-        Assert.Equal("hello", await File.ReadAllTextAsync(target));
+        Assert.Equal("hello", await File.ReadAllTextAsync(target, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -27,7 +27,7 @@ public sealed class AtomicFileTests
 
         await AtomicFile.WriteAllBytesAsync(target, payload);
 
-        Assert.Equal(payload, await File.ReadAllBytesAsync(target));
+        Assert.Equal(payload, await File.ReadAllBytesAsync(target, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -40,8 +40,8 @@ public sealed class AtomicFileTests
 
         // Only the final file should exist — no stray .tmp files.
         var files = Directory.GetFiles(temp.Path);
-        Assert.Single(files);
-        Assert.Equal(target, files[0]);
+        var only = Assert.Single(files);
+        Assert.Equal(target, only);
     }
 
     [Fact]
@@ -49,11 +49,11 @@ public sealed class AtomicFileTests
     {
         using var temp = new TempDir();
         var target = Path.Combine(temp.Path, "file.txt");
-        await File.WriteAllTextAsync(target, "original");
+        await File.WriteAllTextAsync(target, "original", TestContext.Current.CancellationToken);
 
         await AtomicFile.WriteAllTextAsync(target, "replaced");
 
-        Assert.Equal("replaced", await File.ReadAllTextAsync(target));
+        Assert.Equal("replaced", await File.ReadAllTextAsync(target, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -64,13 +64,13 @@ public sealed class AtomicFileTests
         // content — never an empty/half-written target.
         using var temp = new TempDir();
         var target = Path.Combine(temp.Path, "file.txt");
-        await File.WriteAllTextAsync(target, "original");
+        await File.WriteAllTextAsync(target, "original", TestContext.Current.CancellationToken);
 
         // Hard to probe the race deterministically, so at minimum assert
         // that the post-write state is fully the new content.
         await AtomicFile.WriteAllTextAsync(target, "replaced-content-that-is-longer");
 
-        Assert.Equal("replaced-content-that-is-longer", await File.ReadAllTextAsync(target));
+        Assert.Equal("replaced-content-that-is-longer", await File.ReadAllTextAsync(target, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -101,7 +101,7 @@ public sealed class AtomicFileTests
 
         await AtomicFile.WriteAllTextAsync(target, "hello", unixMode: null);
 
-        Assert.Equal("hello", await File.ReadAllTextAsync(target));
+        Assert.Equal("hello", await File.ReadAllTextAsync(target, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -121,7 +121,7 @@ public sealed class AtomicFileTests
         };
         await Task.WhenAll(tasks);
 
-        var final = await File.ReadAllTextAsync(target);
+        var final = await File.ReadAllTextAsync(target, TestContext.Current.CancellationToken);
         Assert.True(final is "writer-a" or "writer-b", $"expected one of the two writes to win, got: {final}");
 
         // No stragglers.
