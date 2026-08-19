@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Changed
+
+- **Dependency updates (no consumer impact).** Bumped `Microsoft.SourceLink.GitHub`
+  to `10.0.400`; test-only `Microsoft.NET.Test.Sdk` to `18.9.0` and
+  `xunit.runner.visualstudio` to `4.0.0`. SourceLink is referenced with
+  `PrivateAssets="All"` and the other two are test-only, so none of these reach
+  consumers and no dependency floor changed. The `net8.0` floors are already at
+  the top of their `8.0.x` servicing lines, and the `net10.0` floors are left at
+  `10.0.10` deliberately rather than raising a floor consumers would be forced to
+  match. `Spectre.Console` (`0.57.2`) and `Spectre.Console.Cli` (`0.55.0`) remain
+  the latest stable releases of each. No public API change.
+
 ## [0.7.1] — 2026-07-24
 
 ### Changed

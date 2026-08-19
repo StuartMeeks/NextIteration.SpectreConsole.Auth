@@ -48,7 +48,7 @@
 		<!-- Common to all target frameworks. -->
 		<PackageReference Include="Spectre.Console" Version="0.57.2" />
 		<PackageReference Include="Spectre.Console.Cli" Version="0.55.0" />
-		<PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.301" PrivateAssets="All" />
+		<PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.400" PrivateAssets="All" />
 		<None Include="..\..\README.md" Pack="true" PackagePath="\" />
 		<None Include="icon.png" Pack="true" PackagePath="" />
 	</ItemGroup>
