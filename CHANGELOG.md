@@ -60,6 +60,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`AtomicFile` could throw on Windows when two writers replaced the same file.** The
+  atomic-replace step used `File.Move(temp, path, overwrite: true)` for every platform. On
+  POSIX that is `rename(2)`, which replaces an open destination and serialises concurrent
+  renames. On Windows it is `MoveFileEx` with `MOVEFILE_REPLACE_EXISTING`, which raises a
+  sharing violation instead — so concurrent writers surfaced as
+  `UnauthorizedAccessException: Access to the path is denied`, and the type's own
+  documentation wrongly claimed the call was atomic on NTFS. Windows now uses
+  `File.Replace` (`ReplaceFile`), which tolerates an open destination, with a short backoff
+  for the race between testing for the destination and replacing it. Found the moment the
+  test matrix started running on Windows, by a concurrency test that had been in the suite
+  all along and had never executed.
 - **The test matrix now runs on Windows as well as Linux and macOS.** Windows-only code
   had never been executed by any test run: `DpapiCredentialEncryption` in full, the ACL
   hardening block in `CredentialsDirectory` that strips inheritance so only the current
