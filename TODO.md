@@ -1,5 +1,26 @@
 # TODO
 
+## Flaky test: KeychainCredentialManagerTests.DeleteCredentialAsync_RemovesCredential
+
+Observed 2026-08-20 on `macos-latest`, net10.0/arm64: `Assert.True(deleted)` failed
+(`DeleteCredentialAsync` returned false) at `KeychainCredentialManagerTests.cs:213`. The
+net8.0/arm64 leg of the same job passed, and a re-run of the identical commit passed
+cleanly — so it is a race, not a deterministic failure.
+
+Two things changed shortly before it appeared, both of which alter timing rather than
+behaviour: the test project began multi-targeting, so two test processes now run
+concurrently against the same login keychain, and coverage instrumentation was enabled.
+The app identifier is already a per-instance GUID, so this is not namespace collision
+between the two runs — more likely `SecItemDelete` racing `SecItemAdd` visibility under
+concurrent keychain access.
+
+Worth fixing rather than re-running: a flaky security-critical test trains people to ignore
+red. Candidate approaches — retry the delete assertion against a short deadline, or have
+the manager confirm deletion by re-querying rather than trusting the status code.
+
+The libsecret tests share the same shape (concurrent runs against one Secret Service) and
+have not failed yet, which is not the same as being correct.
+
 ## Credential store backends
 
 `LocalFileCredentialEncryption` protects credentials with AES-GCM but relies on
