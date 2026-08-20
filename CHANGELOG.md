@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Repository baseline files adopted from NextIteration.Standards.** Adds `SECURITY.md`
+  (disclosure policy, and an explicit statement of what `LocalFileCredentialEncryption`
+  does *not* protect against), `CONTRIBUTING.md`, a pull request template, and a
+  `CLAUDE.md` carrying the constraints an agent would otherwise violate. `global.json` now
+  pins the SDK feature band with `rollForward` as well as selecting the test runner, so a
+  contributor on an older SDK gets the same analyzer results as CI rather than a build that
+  fails only for them. `.gitignore` and `.editorconfig` move to the canonical copies — the
+  `.editorconfig` change fixes a naming rule that matched `const` fields and demanded
+  `_nonceSize` for `private const int NonceSize`. No shipping code or packaging change.
 - **CI adopts the shared NextIteration.Standards shape.** The single required status check
   is now `ci`, an aggregating gate over `build` and `test` that does no work itself. The
   previous `build` + `test-macos` jobs became a `build` job (restore/build/pack) and a
