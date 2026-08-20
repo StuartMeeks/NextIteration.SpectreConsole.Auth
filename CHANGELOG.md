@@ -11,6 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **CI adopts the shared NextIteration.Standards shape.** The single required status check
+  is now `ci`, an aggregating gate over `build` and `test` that does no work itself. The
+  previous `build` + `test-macos` jobs became a `build` job (restore/build/pack) and a
+  `test` matrix over `ubuntu-latest` and `macos-latest`; the `gnome-keyring-daemon` setup
+  is now a step guarded on `runner.os == 'Linux'`. Gating on a gate rather than on job
+  names means the matrix can change without touching branch protection — a required check
+  that names a matrix leg breaks the moment the matrix is edited. Also adds
+  `concurrency` with `cancel-in-progress` (tag builds excepted, so a release cannot be
+  half-cancelled), `timeout-minutes` on every job, and NuGet restore caching.
+- **Added CodeQL code scanning** (`security-and-quality` queries) with an explicit build
+  rather than autobuild, so both target frameworks are analysed.
+- **Added Dependabot** with minor and patch updates grouped into a single PR and
+  auto-merged behind CI; major updates arrive individually and stay open for review. The
+  three packages carrying deliberate per-TFM floors have major updates suppressed outright,
+  because an 8.x to 10.x bump there is never mergeable by design.
 - **Migrated the test suite from xUnit.net v2 to v3.** `xunit` `2.9.3` was
   flagged deprecated ("Legacy") on NuGet and `2.9.3` is the terminal v2 release,
   so no further fixes were coming. Replaced it with `xunit.v3` `4.0.0`. Note the
@@ -44,6 +59,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the latest stable releases of each. No public API change.
 
 ### Fixed
+
+- **The `net8.0` target is now actually tested.** The package has multi-targeted
+  `net8.0;net10.0` since 0.7.0, but the test project targeted `net10.0` only and CI
+  installed just the 10.0.x SDK — so the framework whose consumers the per-TFM dependency
+  floors exist to protect was shipped unverified. The test project now targets both, and
+  CI installs both SDKs. The suite goes from 145 to 290 tests (145 per framework) and
+  passes on both; no behavioural difference was found, so this closes a verification gap
+  rather than a bug.
 
 - **README now states the supported target frameworks accurately.** It claimed `net10.0`
   only — in the .NET badge, the install section, and Requirements — even though the package

@@ -1,35 +1,97 @@
+# CI for NextIteration.SpectreConsole.Auth.
+# Canonical shape defined in NextIteration.Standards STANDARD.md section 3 — change it
+# there first, then here.
+#
+# The single required status check is `ci`, the aggregating gate below. `build` and `test`
+# must NOT be required directly: `test` is a matrix, so its check names carry the matrix
+# values and change whenever the matrix does. The gate's name is stable.
+#
+# This repo runs the test matrix on macOS as well as Linux, and installs
+# gnome-keyring-daemon on the Linux leg. Both are recorded in EXCEPTIONS.md: it is the
+# only repo with OS-native Keychain and libsecret backends.
 name: CI
-
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 on:
   push:
     branches: [ main ]
-    tags:
-      - 'v*'
+    tags: [ 'v*' ]
   pull_request:
     branches: [ main ]
+
+# Superseded pushes are cancelled. Tag builds are never cancelled — a half-cancelled
+# release can leave an incomplete package set on nuget.org.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+permissions:
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
+    timeout-minutes: 15
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
-      - name: Setup .NET 10
-        uses: actions/setup-dotnet@v5
+      # Both SDKs: shipping projects target net8.0 and net10.0 and the tests run
+      # against BOTH (STANDARD.md 2.3), which needs the 8.0 runtime present.
+      - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: |
+            8.0.x
+            10.0.x
 
-      # The libsecret backend exercises the Secret Service D-Bus API
-      # which isn't running by default on ubuntu-latest. Install and start
-      # gnome-keyring-daemon so LibsecretCredentialManagerTests actually
-      # hit libsecret instead of short-circuiting via the
-      # "secret-service-unavailable" probe.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --configuration Release --no-restore
+
+      - name: Pack
+        run: dotnet pack --configuration Release --no-build --output ./artifacts
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: nuget-package
+          # Both .nupkg and .snupkg, so the publish job's glob also pushes symbols.
+          path: ./artifacts/*nupkg
+
+  test:
+    strategy:
+      fail-fast: false        # one platform failing must not hide another's result
+      matrix:
+        os: [ ubuntu-latest, macos-latest ]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      # The libsecret backend exercises the Secret Service D-Bus API, which is not
+      # running on a bare ubuntu runner. Without this the tests short-circuit through
+      # the "secret-service-unavailable" probe instead of hitting libsecret. Linux-only;
+      # the macOS leg uses Security.framework and needs nothing.
       - name: Install and start gnome-keyring-daemon
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y gnome-keyring dbus-x11 libsecret-1-0 libsecret-1-dev
@@ -40,86 +102,65 @@ jobs:
           gnome-keyring-daemon --start --components=secrets &
           sleep 2
 
-      - name: Restore
-        run: dotnet restore
-
-      - name: Build
-        run: dotnet build --configuration Release --no-restore
-
+      # Tests run across every shipped TFM (STANDARD.md 2.3). No --no-build: this job
+      # does not share a filesystem with `build`, and rebuilding is cheaper and less
+      # fragile than shipping obj/ between jobs.
       - name: Test
-        run: dotnet test --configuration Release --no-build --verbosity normal
+        run: dotnet test --configuration Release --verbosity normal
 
-      - name: Pack
-        run: dotnet pack --configuration Release --no-build --output ./artifacts
-
-      - name: Upload package artifact
-        uses: actions/upload-artifact@v6
-        with:
-          name: nuget-package
-          # Capture both .nupkg and .snupkg so the publish job's
-          # `dotnet nuget push *.nupkg` can also push the matching
-          # symbol package next to it.
-          path: ./artifacts/*nupkg
-
-  # Keychain backend is macOS-only. This job runs the same test suite on a
-  # real macOS runner so the Keychain tests actually exercise
-  # Security.framework (on Linux/Windows they vacuously pass via the
-  # OperatingSystem.IsMacOS early-return guard). Runs in parallel with the
-  # primary build job.
-  test-macos:
-    runs-on: macos-latest
-
+  # THE required status check. Aggregates everything above so the ruleset never has to
+  # know the matrix shape. `if: always()` is essential — without it the gate is skipped
+  # when a dependency fails, and a skipped check reads as success to branch protection.
+  ci:
+    needs: [ build, test ]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Setup .NET 10
-        uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: '10.0.x'
-
-      - name: Restore
-        run: dotnet restore
-
-      - name: Build
-        run: dotnet build --configuration Release --no-restore
-
-      - name: Test
-        run: dotnet test --configuration Release --no-build --verbosity normal
+      - name: Verify every required job succeeded
+        env:
+          RESULTS: ${{ join(needs.*.result, ',') }}
+        run: |
+          echo "upstream results: $RESULTS"
+          case "$RESULTS" in
+            *failure*|*cancelled*|*skipped*)
+              echo "::error title=CI gate::an upstream job did not succeed ($RESULTS)"
+              exit 1 ;;
+          esac
+          echo "all upstream jobs succeeded"
 
   publish:
-    needs: build
+    needs: ci
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+    timeout-minutes: 15
+    if: startsWith(github.ref, 'refs/tags/')
 
     permissions:
-      id-token: write   # enable GitHub OIDC token issuance for NuGet trusted publishing
+      id-token: write   # GitHub OIDC token issuance for NuGet trusted publishing
       contents: read
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Setup .NET 10
-        uses: actions/setup-dotnet@v5
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
 
-      - name: Download artifact
-        uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           name: nuget-package
           path: ./artifacts
 
-      # Exchange the GitHub OIDC token for a short-lived (1 hour) nuget.org
-      # API key. Requires a Trusted Publishing policy on nuget.org bound to
-      # this repo + workflow file (ci.yml). NUGET_USER is the nuget.org
-      # account/profile name (not an email).
-      - name: NuGet login (OIDC → temporary API key)
+      # Exchanges the OIDC token for a short-lived (1h) nuget.org key. Requires a
+      # Trusted Publishing policy on nuget.org bound to this repo + workflow file.
+      # NUGET_USER is the nuget.org account name, not an email.
+      - name: NuGet login (OIDC to temporary API key)
         uses: NuGet/login@v1
         id: login
         with:
           user: ${{ secrets.NUGET_USER }}
 
       - name: Publish to NuGet
-        run: dotnet nuget push "./artifacts/*.nupkg" --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
+        run: >
+          dotnet nuget push "./artifacts/*.nupkg"
+          --api-key "${{ steps.login.outputs.NUGET_API_KEY }}"
+          --source https://api.nuget.org/v3/index.json
+          --skip-duplicate

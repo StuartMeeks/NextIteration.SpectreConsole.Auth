@@ -1,0 +1,81 @@
+version: 2
+
+updates:
+  # ---------------------------------------------------------------------------
+  # NuGet packages (src + tests)
+  #
+  # Minor and patch bumps are grouped into a single PR so the auto-merge
+  # workflow has one unambiguous update-type to act on. Major bumps are
+  # deliberately left OUT of the group, so each arrives as its own PR and
+  # stays open for manual review.
+  # ---------------------------------------------------------------------------
+  - package-ecosystem: nuget
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore(deps)"
+    labels:
+      - dependencies
+      - nuget
+    # -------------------------------------------------------------------------
+    # These three carry deliberate per-TFM floors (see the csproj comment): a
+    # net8.0 consumer must stay on its own 8.0.x servicing line, so an
+    # 8.x -> 10.x major PR is never mergeable and would just be weekly noise.
+    #
+    # Two caveats, both inherent to Dependabot rather than to this repo:
+    #  1. `ignore` matches by dependency NAME and cannot be scoped to a single
+    #     target framework. These packages are referenced under BOTH the net8.0
+    #     and net10.0 ItemGroups, so this also suppresses a future net10 major
+    #     (10.x -> 11.x). Bump those by hand when a new .NET major lands.
+    #  2. `ignore` conditions filter SECURITY updates as well as version
+    #     updates, so a major-version security fix for these would also be
+    #     suppressed. Low risk in practice (a CVE fix for 8.0.x ships as
+    #     8.0.y, a patch), but worth knowing.
+    # -------------------------------------------------------------------------
+    ignore:
+      - dependency-name: Microsoft.Extensions.DependencyInjection.Abstractions
+        update-types:
+          - version-update:semver-major
+      - dependency-name: Microsoft.Extensions.Http
+        update-types:
+          - version-update:semver-major
+      - dependency-name: System.Security.Cryptography.ProtectedData
+        update-types:
+          - version-update:semver-major
+    groups:
+      nuget-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+
+  # ---------------------------------------------------------------------------
+  # GitHub Actions used by ci.yml (checkout, setup-dotnet, upload/download
+  # artifact, NuGet/login). Same grouping rule as NuGet.
+  # ---------------------------------------------------------------------------
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore(actions)"
+    labels:
+      - dependencies
+      - github-actions
+    groups:
+      actions-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
