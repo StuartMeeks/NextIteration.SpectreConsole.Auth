@@ -60,6 +60,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The test matrix now runs on Windows as well as Linux and macOS.** Windows-only code
+  had never been executed by any test run: `DpapiCredentialEncryption` in full, the ACL
+  hardening block in `CredentialsDirectory` that strips inheritance so only the current
+  user and SYSTEM can read the credentials directory, and the Windows branches of the
+  unix-mode handling in `AtomicFile`, `SelectionsLock` and `FileCredentialManager`. Four
+  tests written specifically for Windows behaviour were passing vacuously behind
+  `if (OperatingSystem.IsWindows())`. Same class of gap as the untested `net8.0` target,
+  on a security boundary the README advertises. Also bumps `actions/cache` to v6.
 - **The `net8.0` target is now actually tested.** The package has multi-targeted
   `net8.0;net10.0` since 0.7.0, but the test project targeted `net10.0` only and CI
   installed just the 10.0.x SDK — so the framework whose consumers the per-TFM dependency
