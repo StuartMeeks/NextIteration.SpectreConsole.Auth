@@ -6,9 +6,10 @@
 # must NOT be required directly: `test` is a matrix, so its check names carry the matrix
 # values and change whenever the matrix does. The gate's name is stable.
 #
-# This repo runs the test matrix on macOS as well as Linux, and installs
-# gnome-keyring-daemon on the Linux leg. Both are recorded in EXCEPTIONS.md: it is the
-# only repo with OS-native Keychain and libsecret backends.
+# The test matrix runs all three platforms (STANDARD.md 3.1.1) — this repo has an
+# OS-native backend on each: Keychain on macOS, libsecret on Linux, DPAPI plus ACL
+# hardening on Windows. The gnome-keyring-daemon step is guarded to the Linux leg and is
+# the one documented exception in EXCEPTIONS.md.
 name: CI
 
 on:
@@ -42,7 +43,7 @@ jobs:
             8.0.x
             10.0.x
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/Directory.Packages.props', '**/*.csproj') }}
@@ -68,7 +69,7 @@ jobs:
     strategy:
       fail-fast: false        # one platform failing must not hide another's result
       matrix:
-        os: [ ubuntu-latest, macos-latest ]
+        os: [ ubuntu-latest, windows-latest, macos-latest ]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:
@@ -80,7 +81,7 @@ jobs:
             8.0.x
             10.0.x
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/Directory.Packages.props', '**/*.csproj') }}
