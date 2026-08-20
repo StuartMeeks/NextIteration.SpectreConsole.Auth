@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **CodeQL now excludes generated and build output.** A `paths-ignore` for `**/obj/**`
+  and `**/bin/**` was added to the analysis config so findings no longer surface against
+  code no human maintains (e.g. the xUnit auto-generated entry point). The
+  `cs/unmanaged-code` and `cs/call-to-unmanaged-code` notes on the native-backend P/Invoke
+  (Keychain, libsecret, DPAPI) are inherent to what this package does and have been
+  dismissed as *won't fix*; they are not defects.
+
 - **Central Package Management adopted.** Versions move from the two project files to a
   root `Directory.Packages.props`, with `CentralPackageVersionOverrideEnabled=false` so a
   stray inline `Version=` is a hard build error rather than being silently ignored. The
