@@ -43,6 +43,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   match. `Spectre.Console` (`0.57.2`) and `Spectre.Console.Cli` (`0.55.0`) remain
   the latest stable releases of each. No public API change.
 
+### Fixed
+
+- **README now states the supported target frameworks accurately.** It claimed `net10.0`
+  only — in the .NET badge, the install section, and Requirements — even though the package
+  has multi-targeted `net8.0;net10.0` since 0.7.0. The documented dependency floors were
+  stale too: `Spectre.Console` 0.54+ / `Spectre.Console.Cli` 0.53+ against actual floors of
+  0.57.2 / 0.55.0, and a single `10.0+` floor for
+  `Microsoft.Extensions.DependencyInjection.Abstractions` where 0.7.1 deliberately made
+  those floors per-target-framework. Requirements now records the per-TFM floors and why
+  they exist, so the reason net8 consumers are supported is written down rather than
+  implied by the csproj. Documentation only — no code or packaging change.
+
 ## [0.7.1] — 2026-07-24
 
 ### Changed

@@ -3,7 +3,7 @@
 [![NuGet](https://img.shields.io/nuget/v/NextIteration.SpectreConsole.Auth.svg)](https://www.nuget.org/packages/NextIteration.SpectreConsole.Auth/)
 [![Downloads](https://img.shields.io/nuget/dt/NextIteration.SpectreConsole.Auth.svg)](https://www.nuget.org/packages/NextIteration.SpectreConsole.Auth/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![.NET](https://img.shields.io/badge/.NET-10.0-purple.svg)](https://dotnet.microsoft.com/)
+[![.NET](https://img.shields.io/badge/.NET-8.0%20%7C%2010.0-purple.svg)](https://dotnet.microsoft.com/)
 [![CI](https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/actions/workflows/ci.yml/badge.svg)](https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/actions/workflows/ci.yml)
 
 Encrypted credential storage and ready-made `accounts` commands for CLI tools built on [Spectre.Console](https://spectreconsole.net/).
@@ -39,7 +39,7 @@ dotnet add package NextIteration.SpectreConsole.Auth.Providers.Airtable
 dotnet add package NextIteration.SpectreConsole.Auth.Providers.SoftwareOne
 ```
 
-Targets `net10.0`.
+Targets `net8.0` and `net10.0`.
 
 ---
 
@@ -338,9 +338,13 @@ Implement `ICredentialEncryption` and register it before calling `AddCredentialS
 
 ## Requirements
 
-- **.NET 10.0** or later
-- **Spectre.Console** 0.54+ and **Spectre.Console.Cli** 0.53+
-- **Microsoft.Extensions.DependencyInjection.Abstractions** 10.0+
+- **.NET 8.0** or **.NET 10.0** (the package multi-targets `net8.0;net10.0`)
+- **Spectre.Console** 0.57.2+ and **Spectre.Console.Cli** 0.55.0+
+- **Microsoft.Extensions.DependencyInjection.Abstractions** — 8.0.2+ on `net8.0`,
+  10.0.10+ on `net10.0`
+
+Dependency floors are set per target framework, so a `net8.0` consumer is never dragged
+off its own 8.0.x servicing line.
 
 Everything else is transitive.
 
