@@ -106,8 +106,20 @@ jobs:
       # Tests run across every shipped TFM (STANDARD.md 2.3). No --no-build: this job
       # does not share a filesystem with `build`, and rebuilding is cheaper and less
       # fragile than shipping obj/ between jobs.
+      # `-- --coverage` passes through to Microsoft.Testing.Platform's coverage
+      # extension (STANDARD.md 2.6). Referencing a collector without invoking it is
+      # worse than none: it reads as coverage in the dependency list while producing
+      # no data, which is exactly what coverlet was doing in a sibling repo.
       - name: Test
-        run: dotnet test --configuration Release --verbosity normal
+        run: dotnet test --configuration Release --verbosity normal -- --coverage
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-${{ matrix.os }}
+          path: '**/TestResults/*.coverage'
+          if-no-files-found: warn
 
   # THE required status check. Aggregates everything above so the ruleset never has to
   # know the matrix shape. `if: always()` is essential — without it the gate is skipped

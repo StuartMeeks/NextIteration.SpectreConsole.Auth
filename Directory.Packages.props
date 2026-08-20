@@ -1,0 +1,72 @@
+<Project>
+
+	<PropertyGroup>
+		<ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+		<!--
+			Hard-fail if a csproj declares <PackageReference Version="…" />
+			alongside CPM. Without this MSBuild silently ignores the inline
+			version and uses the central one — which is the exact drift this
+			file exists to prevent. STANDARD.md 1.3.
+		-->
+		<CentralPackageVersionOverrideEnabled>false</CentralPackageVersionOverrideEnabled>
+	</PropertyGroup>
+
+	<!--
+		Runtime-aligned Microsoft platform deps: per-TFM floors. STANDARD.md 1.4.
+
+		In a library a PackageReference version is a *minimum* NuGet forces on
+		every downstream consumer (lowest-applicable-version resolution). Flooring
+		these at a single high major would drag net8 LTS consumers off their own
+		runtime-aligned servicing line onto the net10 one. Each target framework
+		therefore floors at its own major. CPM re-evaluates these conditional
+		groups per-TFM during the inner build.
+
+		These three are also listed under `ignore` in .github/dependabot.yml with
+		update-types: [version-update:semver-major] (STANDARD.md 4.10), so
+		Dependabot never proposes the 8.x -> 10.x bump that can never be merged.
+
+		Versions here are unchanged from the per-project references they replaced.
+		This migration is deliberately behaviour-preserving: raising a floor is a
+		consumer-visible change and belongs in its own reviewed commit.
+	-->
+	<ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
+		<PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.2" />
+		<PackageVersion Include="Microsoft.Extensions.Http" Version="8.0.1" />
+		<PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
+	</ItemGroup>
+	<ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
+		<PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.10" />
+		<PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.10" />
+		<PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="10.0.10" />
+	</ItemGroup>
+
+	<!--
+		Not runtime-aligned: a single common floor at the version actually built
+		and tested against. Spectre.Console is pre-1.0 — breaking changes land
+		between minors, so a low floor would be both meaningless and risky.
+		STANDARD.md 1.5.
+
+		Spectre.Console.Cli's latest stable is 0.55.0 (no 0.56/0.57 exists); it
+		requires Spectre.Console >= 0.55.0, which 0.57.2 satisfies.
+	-->
+	<ItemGroup>
+		<PackageVersion Include="Spectre.Console" Version="0.57.2" />
+		<PackageVersion Include="Spectre.Console.Cli" Version="0.55.0" />
+	</ItemGroup>
+
+	<!-- Build / source-link tooling. PrivateAssets="All" in the csproj. STANDARD.md 1.7. -->
+	<ItemGroup>
+		<PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.400" />
+	</ItemGroup>
+
+	<!--
+		Test-only. STANDARD.md 2.1/2.5/2.6 — xunit.v3 on Microsoft.Testing.Platform.
+		Do NOT add Microsoft.NET.Test.Sdk, xunit.runner.visualstudio or
+		coverlet.collector: all three are VSTest-only and MTP replaces the runner.
+	-->
+	<ItemGroup>
+		<PackageVersion Include="xunit.v3" Version="4.0.0" />
+		<PackageVersion Include="Microsoft.Testing.Extensions.CodeCoverage" Version="18.10.0" />
+	</ItemGroup>
+
+</Project>

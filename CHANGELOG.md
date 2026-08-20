@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Central Package Management adopted.** Versions move from the two project files to a
+  root `Directory.Packages.props`, with `CentralPackageVersionOverrideEnabled=false` so a
+  stray inline `Version=` is a hard build error rather than being silently ignored. The
+  per-TFM floors are preserved exactly — CPM re-evaluates the conditional `ItemGroup`s per
+  target framework during the inner build, so `net8.0` still floors at 8.0.x and `net10.0`
+  at 10.0.x. **Verified behaviour-preserving: the generated `.nuspec` is byte-identical
+  before and after.** Raising a floor is a consumer-visible change and deliberately not
+  bundled here.
+- **Properties every project restated now live in `Directory.Build.props`.** `ImplicitUsings`,
+  `AnalysisLevel`, `GenerateDocumentationFile`, `EnablePackageValidation`, `IncludeSymbols`,
+  `SymbolPackageFormat`, `DebugType`, `PublishRepositoryUrl`, `EmbedUntrackedSources`,
+  `ContinuousIntegrationBuild`, `SatelliteResourceLanguages`, `PackageLicenseExpression` and
+  `Copyright`. Duplicated settings are how the repos drifted apart in the first place; each
+  csproj now carries only what is genuinely specific to it.
+- **Code coverage is now collected.** Adds `Microsoft.Testing.Extensions.CodeCoverage` and,
+  crucially, has CI invoke it (`dotnet test -- --coverage`) and upload the result. A
+  collector that is referenced but never invoked reads as coverage while producing no data.
 - **Repository baseline files adopted from NextIteration.Standards.** Adds `SECURITY.md`
   (disclosure policy, and an explicit statement of what `LocalFileCredentialEncryption`
   does *not* protect against), `CONTRIBUTING.md`, a pull request template, and a
