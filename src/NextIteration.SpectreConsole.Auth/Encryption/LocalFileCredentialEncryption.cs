@@ -34,14 +34,38 @@ namespace NextIteration.SpectreConsole.Auth.Encryption
     /// For the strongest protection, use DPAPI (on Windows) or a platform
     /// keychain (macOS Keychain, Linux libsecret) instead.
     /// </para>
+    /// <para>
+    /// The <c>.keystore</c> file written by this version carries a format
+    /// header so future changes can be detected and rejected cleanly. Legacy
+    /// headerless keystores are still read; keystores written by this version
+    /// are not readable by pre-header library versions.
+    /// </para>
+    /// <para>
+    /// Implements <see cref="IDisposable"/>: disposing zeroes the in-memory
+    /// data key and any caller-supplied entropy. When registered in DI as a
+    /// singleton (the default), this happens at container disposal.
+    /// </para>
     /// </remarks>
-    public class LocalFileCredentialEncryption : ICredentialEncryption
+    public class LocalFileCredentialEncryption : ICredentialEncryption, IDisposable
     {
         // AES-GCM standard sizes. 12-byte nonce and 16-byte tag are the
         // recommended defaults and the values NIST SP 800-38D specifies.
         private const int NonceSize = 12;
         private const int TagSize = 16;
         private const int KeySize = 32; // AES-256
+
+        // Keystore file format header. A keystore written by this version is
+        // prefixed with this magic and a one-byte format version, so a future
+        // KDF/format change can be detected and rejected with a clear
+        // "unsupported format" error instead of surfacing as an opaque
+        // integrity-check failure. Keystores written by earlier versions have
+        // no header (they begin with a random 12-byte nonce); those are still
+        // read, since the 8-byte magic can't plausibly collide with a random
+        // nonce prefix (~2^-64). Note the reverse is not true: a keystore
+        // written by this version is not readable by pre-header library
+        // versions.
+        private static readonly byte[] KeystoreMagic = "NISCA-KS"u8.ToArray();
+        private const byte KeystoreFormatVersion = 1;
 
         // PBKDF2-HMAC-SHA256 iteration count. OWASP 2023 guidance is
         // 600,000. In default mode (no caller entropy) iterations provide
@@ -65,6 +89,7 @@ namespace NextIteration.SpectreConsole.Auth.Encryption
         // want to fail every call the same way, not re-try and succeed on
         // some while failing on others.
         private readonly Lazy<Task<byte[]>> _dataKey;
+        private bool _disposed;
 
         /// <summary>
         /// Creates the encryption implementation backed by a keystore file
@@ -116,6 +141,14 @@ namespace NextIteration.SpectreConsole.Auth.Encryption
                 var key = await GetOrCreateKeyAsync().ConfigureAwait(false);
                 var plainBytes = Encoding.UTF8.GetBytes(plainText);
                 return Convert.ToBase64String(EncryptWithGcm(key, plainBytes));
+            }
+            catch (InvalidOperationException)
+            {
+                // An already-actionable message (e.g. an unsupported keystore
+                // format surfaced during lazy key load) should propagate as-is
+                // rather than being re-wrapped as a generic encrypt failure.
+                // Mirrors the same passthrough in DecryptAsync.
+                throw;
             }
             catch (Exception ex)
             {
@@ -173,9 +206,39 @@ namespace NextIteration.SpectreConsole.Auth.Encryption
                 await CreateKeyFileAsync().ConfigureAwait(false);
             }
 
-            var encryptedKey = await File.ReadAllBytesAsync(_keyFile).ConfigureAwait(false);
+            var stored = await File.ReadAllBytesAsync(_keyFile).ConfigureAwait(false);
+            var encryptedKey = StripKeystoreHeader(stored);
             var kek = DeriveKeyEncryptionKey();
             return DecryptWithGcm(kek, encryptedKey);
+        }
+
+        /// <summary>
+        /// Returns the AES-GCM payload of a keystore file, skipping the format
+        /// header when present. A keystore written by this version begins with
+        /// <see cref="KeystoreMagic"/> followed by a one-byte version; a legacy
+        /// keystore has no header and is returned unchanged. Throws when the
+        /// header is present but its version is not understood, so a keystore
+        /// from a newer library fails clearly rather than as an opaque
+        /// integrity error.
+        /// </summary>
+        private static byte[] StripKeystoreHeader(byte[] stored)
+        {
+            var headerLength = KeystoreMagic.Length + 1;
+            if (stored.Length < headerLength ||
+                !stored.AsSpan(0, KeystoreMagic.Length).SequenceEqual(KeystoreMagic))
+            {
+                // No recognisable header — treat as a legacy headerless keystore.
+                return stored;
+            }
+
+            var version = stored[KeystoreMagic.Length];
+            if (version != KeystoreFormatVersion)
+            {
+                throw new InvalidOperationException(
+                    $"Unsupported keystore format version {version}. This build supports version {KeystoreFormatVersion}; the keystore was likely written by a newer version of the library.");
+            }
+
+            return stored[headerLength..];
         }
 
         private async Task CreateKeyFileAsync()
@@ -183,6 +246,14 @@ namespace NextIteration.SpectreConsole.Auth.Encryption
             var key = RandomNumberGenerator.GetBytes(KeySize);
             var kek = DeriveKeyEncryptionKey();
             var encryptedKey = EncryptWithGcm(kek, key);
+
+            // Frame the payload with the format header so the version is
+            // self-describing on the next read.
+            var framed = new byte[KeystoreMagic.Length + 1 + encryptedKey.Length];
+            Buffer.BlockCopy(KeystoreMagic, 0, framed, 0, KeystoreMagic.Length);
+            framed[KeystoreMagic.Length] = KeystoreFormatVersion;
+            Buffer.BlockCopy(encryptedKey, 0, framed, KeystoreMagic.Length + 1, encryptedKey.Length);
+            encryptedKey = framed;
 
             var directory = Path.GetDirectoryName(_keyFile);
             if (!string.IsNullOrEmpty(directory))
@@ -266,6 +337,49 @@ namespace NextIteration.SpectreConsole.Auth.Encryption
             using var aes = new AesGcm(key, TagSize);
             aes.Decrypt(nonce, ciphertext, tag, plaintext);
             return plaintext;
+        }
+
+        /// <summary>
+        /// Zeroes the in-memory data key and caller-supplied entropy. Safe to
+        /// call more than once.
+        /// </summary>
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        /// <summary>
+        /// Core disposal. Overriders should call the base implementation so the
+        /// key material is still cleared.
+        /// </summary>
+        /// <param name="disposing">
+        /// <see langword="true"/> when called from <see cref="Dispose()"/>.
+        /// </param>
+        protected virtual void Dispose(bool disposing)
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            if (disposing)
+            {
+                if (_callerEntropy is not null)
+                {
+                    CryptographicOperations.ZeroMemory(_callerEntropy);
+                }
+
+                // Only zero the cached key if it was actually derived and
+                // completed successfully; touching a faulted/pending Task's
+                // Result would throw or block.
+                if (_dataKey.IsValueCreated && _dataKey.Value.IsCompletedSuccessfully)
+                {
+                    CryptographicOperations.ZeroMemory(_dataKey.Value.Result);
+                }
+            }
+
+            _disposed = true;
         }
     }
 }

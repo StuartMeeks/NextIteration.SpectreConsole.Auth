@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Security.Cryptography;
 
 using NextIteration.SpectreConsole.Auth.Encryption;
@@ -180,7 +181,7 @@ public sealed class LocalFileCredentialEncryptionTests
     {
         using var temp = new TempDir();
         var encryption = new LocalFileCredentialEncryption(temp.Path);
-        var keystorePath = Path.Combine(temp.Path, ".keystore");
+        var keystorePath = Path.Join(temp.Path, ".keystore");
 
         Assert.False(File.Exists(keystorePath), "keystore should not exist before first encrypt/decrypt");
 
@@ -256,7 +257,7 @@ public sealed class LocalFileCredentialEncryptionTests
         // Delete the keystore and create a new instance with a different
         // entropy — the new instance will write a fresh keystore and fail
         // to decrypt the old ciphertext.
-        File.Delete(Path.Combine(temp.Path, ".keystore"));
+        File.Delete(Path.Join(temp.Path, ".keystore"));
         var entropyB = "entropy-bravo"u8.ToArray();
         var wrongEntropy = new LocalFileCredentialEncryption(temp.Path, entropyB);
 
@@ -337,6 +338,98 @@ public sealed class LocalFileCredentialEncryptionTests
         }
 
         Assert.Equal("immutable entropy", await encryption.DecryptAsync(cipher));
+    }
+
+    // =========================
+    // Keystore format versioning
+    // =========================
+
+    private static readonly byte[] KeystoreMagic = "NISCA-KS"u8.ToArray();
+
+    [Fact]
+    public async Task Keystore_WrittenByThisVersion_CarriesFormatHeader()
+    {
+        using var temp = new TempDir();
+        var encryption = new LocalFileCredentialEncryption(temp.Path);
+
+        _ = await encryption.EncryptAsync("trigger keystore creation");
+
+        var bytes = await File.ReadAllBytesAsync(Path.Join(temp.Path, ".keystore"), TestContext.Current.CancellationToken);
+        Assert.True(bytes.Length > KeystoreMagic.Length + 1);
+        Assert.Equal(KeystoreMagic, bytes[..KeystoreMagic.Length]);
+        Assert.Equal(1, bytes[KeystoreMagic.Length]); // format version
+    }
+
+    [Fact]
+    public async Task Keystore_LegacyHeaderless_IsStillReadable()
+    {
+        using var temp = new TempDir();
+        var keystorePath = Path.Join(temp.Path, ".keystore");
+
+        // Produce a keystore, then strip its header to reconstruct the legacy
+        // headerless on-disk shape a pre-header library version would have
+        // written. A fresh instance must still read ciphertext bound to it.
+        var writer = new LocalFileCredentialEncryption(temp.Path);
+        var cipher = await writer.EncryptAsync("bound to a legacy keystore");
+
+        var framed = await File.ReadAllBytesAsync(keystorePath, TestContext.Current.CancellationToken);
+        var legacy = framed[(KeystoreMagic.Length + 1)..];
+        await File.WriteAllBytesAsync(keystorePath, legacy, TestContext.Current.CancellationToken);
+
+        var reader = new LocalFileCredentialEncryption(temp.Path);
+        Assert.Equal("bound to a legacy keystore", await reader.DecryptAsync(cipher));
+    }
+
+    [Fact]
+    public async Task Keystore_UnknownFormatVersion_ThrowsClearError()
+    {
+        using var temp = new TempDir();
+        var keystorePath = Path.Join(temp.Path, ".keystore");
+
+        var writer = new LocalFileCredentialEncryption(temp.Path);
+        _ = await writer.EncryptAsync("anything");
+
+        // Bump the version byte to one this build doesn't understand.
+        var bytes = await File.ReadAllBytesAsync(keystorePath, TestContext.Current.CancellationToken);
+        bytes[KeystoreMagic.Length] = 0xFF;
+        await File.WriteAllBytesAsync(keystorePath, bytes, TestContext.Current.CancellationToken);
+
+        var reader = new LocalFileCredentialEncryption(temp.Path);
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => reader.EncryptAsync("triggers keystore load"));
+        Assert.Contains("version", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // =========================
+    // Zero-on-dispose
+    // =========================
+
+    [Fact]
+    public async Task Dispose_ZeroesKeyMaterial_AndIsIdempotent()
+    {
+        using var temp = new TempDir();
+        var entropy = new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 };
+        // `using` guarantees disposal even if EncryptAsync throws; the explicit
+        // Dispose() calls below still exercise the zeroing + idempotency.
+        using var encryption = new LocalFileCredentialEncryption(temp.Path, entropy);
+
+        _ = await encryption.EncryptAsync("ensure the data key is derived");
+
+        encryption.Dispose();
+        encryption.Dispose(); // idempotent — must not throw
+
+        // The internal defensive copy of the entropy is zeroed.
+        var entropyField = typeof(LocalFileCredentialEncryption)
+            .GetField("_callerEntropy", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        var storedEntropy = (byte[])entropyField.GetValue(encryption)!;
+        Assert.All(storedEntropy, b => Assert.Equal(0, b));
+
+        // The cached data key is zeroed too.
+        var dataKeyField = typeof(LocalFileCredentialEncryption)
+            .GetField("_dataKey", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        var lazy = (Lazy<Task<byte[]>>)dataKeyField.GetValue(encryption)!;
+        Assert.True(lazy.IsValueCreated);
+        Assert.All(await lazy.Value, b => Assert.Equal(0, b));
     }
 
     [Fact]

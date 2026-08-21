@@ -30,7 +30,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     on the file and libsecret backends. On the macOS Keychain the creation timestamp is
     assigned by the OS, so a restored item gets a fresh one (cosmetic only).
 
+- **`LocalFileCredentialEncryption` now zeroes key material on dispose.** The class
+  implements `IDisposable` and, when disposed, `CryptographicOperations.ZeroMemory`s the
+  in-memory data key and any caller-supplied entropy so a heap dump taken after shutdown
+  doesn't expose them. Registered as a DI singleton (the default), this runs at container
+  disposal — no consumer code change required.
+
 ### Changed
+
+- **`.keystore` files now carry a format header (magic + 1-byte version).** A future
+  KDF/format change can now be detected and rejected with a clear "unsupported keystore
+  format version" error instead of surfacing as an opaque integrity-check failure.
+  Keystores written by earlier (headerless) versions are still read; **note the reverse is
+  not true** — a keystore written by this version is not readable by pre-header library
+  versions. For consistency, `EncryptAsync` now lets an already-actionable
+  `InvalidOperationException` (such as this one) propagate as-is rather than re-wrapping it
+  as a generic encrypt failure, matching `DecryptAsync`.
 
 - **BREAKING: `ICredentialManager` gains two members** — `ExportCredentialsAsync()` and
   `RestoreCredentialAsync(CredentialExport)`, plus the new public `CredentialExport` record
