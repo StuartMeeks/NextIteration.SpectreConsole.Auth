@@ -9,7 +9,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`accounts export` and `accounts import` — move your whole credential set between
+  machines.** On-disk credential ciphertext is machine-bound (each backend keys off
+  machine/user identity or an OS secret store), so the raw files can't be copied across
+  machines. Export instead reads every credential *decrypted* and re-encrypts the whole
+  set into a single portable archive under a **user-supplied passphrase** (AES-256-GCM
+  over PBKDF2-HMAC-SHA256, 600k iterations, random per-export salt); import decrypts it and
+  re-stores each credential through the normal backend path, re-protecting it under the
+  destination machine's key/store. The archive holds every secret protected only by the
+  passphrase, so the export command warns accordingly and writes the file `0600` on Unix.
+  - Export always requires a passphrase (prompted and confirmed, or read from an env var
+    via `--passphrase-env` for scripts); there is no plaintext export path.
+  - Import matches an incoming credential to an existing one on
+    *(provider, account name, environment)* and, on a collision, prompts per conflict for
+    skip/overwrite. `--on-conflict skip|overwrite` makes it non-interactive; a
+    non-interactive run with no flag defaults to `skip`.
+  - AccountId and selection state are preserved on all backends; `CreatedAt` is preserved
+    on the file and libsecret backends. On the macOS Keychain the creation timestamp is
+    assigned by the OS, so a restored item gets a fresh one (cosmetic only).
+
 ### Changed
+
+- **BREAKING: `ICredentialManager` gains two members** — `ExportCredentialsAsync()` and
+  `RestoreCredentialAsync(CredentialExport)`, plus the new public `CredentialExport` record
+  (a full-fidelity credential including its *decrypted* payload). These back the new
+  export/import commands and let each backend enumerate/restore natively rather than
+  composing it above the interface. Any external `ICredentialManager` implementation must
+  add both members; this warrants a **major version bump** and a matching update to the
+  downstream provider packages' capped dependency range.
 
 - **CodeQL now excludes generated and build output.** A `paths-ignore` for `**/obj/**`
   and `**/bin/**` was added to the analysis config so findings no longer surface against

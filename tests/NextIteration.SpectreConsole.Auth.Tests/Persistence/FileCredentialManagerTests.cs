@@ -499,6 +499,97 @@ public sealed class FileCredentialManagerTests
         Assert.True(airtable.IsSelected);
     }
 
+    [Fact]
+    public async Task ExportCredentialsAsync_ReturnsDecryptedPayloadAndSelection()
+    {
+        using var temp = new TempDir();
+        var manager = CreateManager(temp.Path);
+        var adobeId = await manager.AddCredentialAsync("Adobe", "prod", "Production", "{\"apiKey\":\"secret\"}");
+        _ = await manager.AddCredentialAsync("Airtable", "main", "Production", "{\"apiKey\":\"other\"}");
+        Assert.True(await manager.SelectCredentialAsync(adobeId));
+
+        var exports = await manager.ExportCredentialsAsync();
+
+        Assert.Equal(2, exports.Count);
+        var adobe = exports.Single(c => c.ProviderName == "Adobe");
+        Assert.Equal("prod", adobe.AccountName);
+        Assert.Equal("Production", adobe.Environment);
+        Assert.Equal("{\"apiKey\":\"secret\"}", adobe.CredentialData); // decrypted
+        Assert.True(adobe.IsSelected);
+        Assert.False(exports.Single(c => c.ProviderName == "Airtable").IsSelected);
+    }
+
+    [Fact]
+    public async Task RestoreCredentialAsync_PreservesAccountIdCreatedAtAndSelection()
+    {
+        using var temp = new TempDir();
+        var manager = CreateManager(temp.Path);
+
+        var record = new CredentialExport
+        {
+            AccountId = Guid.NewGuid().ToString(),
+            AccountName = "prod",
+            ProviderName = "Adobe",
+            Environment = "Production",
+            CredentialData = "{\"apiKey\":\"restored\"}",
+            CreatedAt = new DateTime(2018, 5, 6, 7, 8, 9, DateTimeKind.Utc),
+            IsSelected = true,
+        };
+
+        await manager.RestoreCredentialAsync(record);
+
+        var stored = Assert.Single(await manager.ExportCredentialsAsync());
+        Assert.Equal(record.AccountId, stored.AccountId);
+        Assert.Equal(record.CreatedAt, stored.CreatedAt);
+        Assert.True(stored.IsSelected);
+        Assert.Equal("{\"apiKey\":\"restored\"}", await manager.GetCredentialByIdAsync("Adobe", record.AccountId));
+    }
+
+    [Fact]
+    public async Task RestoreCredentialAsync_SameProviderAndId_ReplacesRatherThanDuplicates()
+    {
+        using var temp = new TempDir();
+        var manager = CreateManager(temp.Path);
+        var id = Guid.NewGuid().ToString();
+
+        CredentialExport Record(string payload) => new()
+        {
+            AccountId = id,
+            AccountName = "prod",
+            ProviderName = "Adobe",
+            Environment = "Production",
+            CredentialData = payload,
+            CreatedAt = new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+            IsSelected = false,
+        };
+
+        await manager.RestoreCredentialAsync(Record("{\"v\":1}"));
+        await manager.RestoreCredentialAsync(Record("{\"v\":2}"));
+
+        var stored = Assert.Single(await manager.ExportCredentialsAsync());
+        Assert.Equal("{\"v\":2}", stored.CredentialData);
+    }
+
+    [Fact]
+    public async Task RestoreCredentialAsync_InvalidAccountId_Throws()
+    {
+        using var temp = new TempDir();
+        var manager = CreateManager(temp.Path);
+
+        var bad = new CredentialExport
+        {
+            AccountId = "../not-a-guid",
+            AccountName = "prod",
+            ProviderName = "Adobe",
+            Environment = "Production",
+            CredentialData = "{}",
+            CreatedAt = DateTime.UtcNow,
+            IsSelected = false,
+        };
+
+        _ = await Assert.ThrowsAsync<ArgumentException>(() => manager.RestoreCredentialAsync(bad));
+    }
+
     /// <summary>
     /// Minimal summary provider used only to verify that
     /// <see cref="FileCredentialManager.ListCredentialsAsync"/> routes

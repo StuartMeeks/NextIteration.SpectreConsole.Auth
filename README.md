@@ -109,8 +109,29 @@ public sealed class SyncCommand(AdobeAuthenticationService auth) : AsyncCommand
 | `accounts list` | Table of stored credentials, grouped by provider, with provider-specific columns (masked tokens, URLs, etc.). |
 | `accounts select [id]` | Mark one credential as the active one for its provider. Subsequent `AuthenticateAsync()` calls use it. |
 | `accounts delete [id] [--force]` | Remove a credential. Clears the selection if it pointed at the deleted entry. |
+| `accounts export <file> [--force]` | Write every credential to a single passphrase-encrypted archive. |
+| `accounts import <file> [--on-conflict skip\|overwrite]` | Restore credentials from an archive into this machine's store. |
 
 Every command accepts `-v` / `--verbose` for full stack-trace output when something goes wrong.
+
+### Moving credentials between machines
+
+Stored credentials are encrypted with a **machine-bound** key (the local KEK is derived from machine/user identity; the Keychain/libsecret/DPAPI backends key off the OS secret store). That means the files on disk can't simply be copied to another machine — they won't decrypt there. `accounts export` / `accounts import` solve this by re-encrypting the whole set under a passphrase you carry:
+
+```console
+# On the old machine — you'll be prompted for a passphrase (and to confirm it):
+$ my-cli accounts export credentials.bundle
+Exported 4 credential(s) to credentials.bundle.
+
+# Copy credentials.bundle to the new machine, then:
+$ my-cli accounts import credentials.bundle
+```
+
+- **Passphrase-only.** The archive is AES-256-GCM encrypted with a PBKDF2-derived key (600,000 iterations, random per-export salt). There is no plaintext export. For scripting, read the passphrase from an environment variable with `--passphrase-env MY_VAR` instead of being prompted. On Unix the archive file is written `0600`.
+- **Conflicts.** An imported credential is matched to an existing one on *(provider, account name, environment)*. On a match you're prompted to skip or overwrite; pass `--on-conflict skip` or `--on-conflict overwrite` to decide up front (a non-interactive run with no flag skips).
+- **Fidelity.** Account IDs and which credential is selected are preserved. Original creation timestamps are preserved on the file and libsecret backends; the macOS Keychain assigns its own, so imported items show a fresh timestamp there.
+
+> The archive contains **every stored secret**, protected only by your passphrase. Choose a strong one and treat the file as sensitive.
 
 ---
 

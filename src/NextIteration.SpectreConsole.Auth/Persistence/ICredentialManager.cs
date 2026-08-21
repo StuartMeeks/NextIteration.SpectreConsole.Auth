@@ -67,6 +67,46 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
         /// one stored credential.
         /// </summary>
         Task<IEnumerable<string>> GetProviderNamesAsync();
+
+        /// <summary>
+        /// Enumerates every stored credential across all providers, each with
+        /// its <b>decrypted</b> payload and current selection state. This is
+        /// the read half of the export/import feature and the counterpart to
+        /// <see cref="RestoreCredentialAsync"/>.
+        /// </summary>
+        /// <returns>
+        /// A snapshot of all stored credentials as <see cref="CredentialExport"/>
+        /// records. The list is empty when nothing is stored.
+        /// </returns>
+        /// <remarks>
+        /// Unlike <see cref="CredentialSummary"/>, the returned records carry
+        /// the plaintext <see cref="CredentialExport.CredentialData"/>. Handle
+        /// the result as secret material: never log it and don't persist it
+        /// unencrypted.
+        /// </remarks>
+        Task<IReadOnlyList<CredentialExport>> ExportCredentialsAsync();
+
+        /// <summary>
+        /// Recreates a credential from an export record, preserving its
+        /// <see cref="CredentialExport.AccountId"/>, its
+        /// <see cref="CredentialExport.CreatedAt"/> (where the backend allows
+        /// it), and its selection state. Any existing credential with the same
+        /// <see cref="CredentialExport.ProviderName"/> and
+        /// <see cref="CredentialExport.AccountId"/> is replaced.
+        /// </summary>
+        /// <param name="credential">
+        /// The record to restore. Its <see cref="CredentialExport.CredentialData"/>
+        /// is the plaintext payload and is re-protected by the backend on write.
+        /// </param>
+        /// <remarks>
+        /// The record's <see cref="CredentialExport.ProviderName"/> and
+        /// <see cref="CredentialExport.AccountId"/> are validated before use —
+        /// this method is fed from imported archives, which are untrusted input.
+        /// The macOS Keychain backend assigns its own creation timestamp, so a
+        /// restored item's <see cref="CredentialExport.CreatedAt"/> is not
+        /// preserved there.
+        /// </remarks>
+        Task RestoreCredentialAsync(CredentialExport credential);
     }
 
     /// <summary>
@@ -102,5 +142,48 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
         /// Empty when no summary provider is registered for this provider.
         /// </summary>
         public IReadOnlyList<KeyValuePair<string, string>> DisplayFields { get; init; } = [];
+    }
+
+    /// <summary>
+    /// A full-fidelity, portable snapshot of a single stored credential,
+    /// including its <b>decrypted</b> payload. Produced by
+    /// <see cref="ICredentialManager.ExportCredentialsAsync"/> and consumed by
+    /// <see cref="ICredentialManager.RestoreCredentialAsync"/> to move
+    /// credentials between machines.
+    /// </summary>
+    /// <remarks>
+    /// This type carries secret material in <see cref="CredentialData"/>.
+    /// Callers that serialise it — for example the <c>accounts export</c>
+    /// command — must encrypt the result before it touches disk; the built-in
+    /// export path protects it with a user-supplied passphrase.
+    /// </remarks>
+    public sealed class CredentialExport
+    {
+        /// <summary>Unique GUID assigned at the credential's original creation time.</summary>
+        public required string AccountId { get; init; }
+
+        /// <summary>User-supplied display name.</summary>
+        public required string AccountName { get; init; }
+
+        /// <summary>Provider this credential belongs to.</summary>
+        public required string ProviderName { get; init; }
+
+        /// <summary>Environment the credential targets.</summary>
+        public required string Environment { get; init; }
+
+        /// <summary>
+        /// The decrypted, plaintext credential payload (the same JSON that was
+        /// passed to <see cref="ICredentialManager.AddCredentialAsync"/>).
+        /// </summary>
+        public required string CredentialData { get; init; }
+
+        /// <summary>Timestamp at which the credential was originally added.</summary>
+        public required DateTime CreatedAt { get; init; }
+
+        /// <summary>
+        /// True when this credential was the active one for its provider at
+        /// export time. A restored credential with this set is re-selected.
+        /// </summary>
+        public required bool IsSelected { get; init; }
     }
 }

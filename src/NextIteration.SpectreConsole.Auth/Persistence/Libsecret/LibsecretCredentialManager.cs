@@ -247,6 +247,82 @@ public sealed class LibsecretCredentialManager : ICredentialManager
         return Task.FromResult<IEnumerable<string>>(names!);
     }
 
+    /// <inheritdoc />
+    public Task<IReadOnlyList<CredentialExport>> ExportCredentialsAsync()
+    {
+        var items = SearchItems(
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [AttrApp] = _appIdentifier,
+                [AttrKind] = KindCredential,
+            },
+            loadSecrets: true);
+
+        var selectionCache = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+
+        var exports = new List<CredentialExport>();
+        foreach (var item in items)
+        {
+            var providerName = item.Attributes.GetValueOrDefault(AttrProvider);
+            if (string.IsNullOrEmpty(providerName))
+                continue;
+
+            if (!selectionCache.TryGetValue(providerName, out var selectedId))
+            {
+                selectedId = ReadSelection(providerName);
+                selectionCache[providerName] = selectedId;
+            }
+
+            var accountId = item.Attributes.GetValueOrDefault(AttrAccount, string.Empty);
+
+            exports.Add(new CredentialExport
+            {
+                AccountId = accountId,
+                AccountName = item.Attributes.GetValueOrDefault(AttrLabel, string.Empty),
+                ProviderName = providerName,
+                Environment = item.Attributes.GetValueOrDefault(AttrEnvironment, string.Empty),
+                CredentialData = item.Secret ?? string.Empty,
+                CreatedAt = ParseCreatedAt(item.Attributes.GetValueOrDefault(AttrCreatedAt)),
+                IsSelected = selectedId is not null && string.Equals(selectedId, accountId, StringComparison.OrdinalIgnoreCase),
+            });
+        }
+
+        return Task.FromResult<IReadOnlyList<CredentialExport>>(exports);
+    }
+
+    /// <inheritdoc />
+    public Task RestoreCredentialAsync(CredentialExport credential)
+    {
+        ArgumentNullException.ThrowIfNull(credential);
+        ValidateProviderName(credential.ProviderName);
+        ValidateAccountId(credential.AccountId);
+
+        // store overwrites an item whose attributes match exactly, so writing
+        // with the same (app, kind, provider, account) replaces any existing
+        // entry — a re-import is idempotent. CreatedAt is carried across
+        // faithfully via the attribute.
+        var attrs = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [AttrApp] = _appIdentifier,
+            [AttrKind] = KindCredential,
+            [AttrProvider] = credential.ProviderName,
+            [AttrAccount] = credential.AccountId,
+            [AttrLabel] = credential.AccountName,
+            [AttrEnvironment] = credential.Environment,
+            [AttrCreatedAt] = credential.CreatedAt.ToString("O"),
+        };
+        var label = $"{_appIdentifier}: {credential.ProviderName}/{credential.AccountName}";
+
+        StoreItem(attrs, label, credential.CredentialData);
+
+        if (credential.IsSelected)
+        {
+            WriteSelection(credential.ProviderName, credential.AccountId);
+        }
+
+        return Task.CompletedTask;
+    }
+
     // =========================
     // Internal helpers
     // =========================

@@ -68,6 +68,44 @@ public sealed class KeychainCredentialManagerTests : IDisposable
     }
 
     [Fact]
+    public async Task ExportCredentialsAsync_ReturnsDecryptedPayloadAndSelection()
+    {
+        if (_skip) return;
+        var manager = NewManager();
+        var id = await manager.AddCredentialAsync("Adobe", "prod", "Production", "{\"apiKey\":\"secret\"}");
+        Assert.True(await manager.SelectCredentialAsync(id));
+
+        var adobe = Assert.Single(await manager.ExportCredentialsAsync());
+        Assert.Equal(id, adobe.AccountId);
+        Assert.Equal("prod", adobe.AccountName);
+        Assert.Equal("Adobe", adobe.ProviderName);
+        Assert.Equal("Production", adobe.Environment);
+        Assert.Equal("{\"apiKey\":\"secret\"}", adobe.CredentialData);
+        Assert.True(adobe.IsSelected);
+    }
+
+    [Fact]
+    public async Task RestoreCredentialAsync_PreservesAccountIdAndSelection()
+    {
+        // The macOS Keychain assigns its own creation date, so CreatedAt is
+        // intentionally not asserted here (see RestoreCredentialAsync remarks).
+        if (_skip) return;
+        var manager = NewManager();
+        var id = await manager.AddCredentialAsync("Adobe", "prod", "Production", "{\"apiKey\":\"secret\"}");
+        _ = await manager.SelectCredentialAsync(id);
+        var exported = Assert.Single(await manager.ExportCredentialsAsync());
+
+        // Simulate an import: drop it, then restore from the export record.
+        Assert.True(await manager.DeleteCredentialAsync(id));
+        await manager.RestoreCredentialAsync(exported);
+
+        var restored = Assert.Single(await manager.ExportCredentialsAsync());
+        Assert.Equal(id, restored.AccountId);
+        Assert.True(restored.IsSelected);
+        Assert.Equal("{\"apiKey\":\"secret\"}", await manager.GetSelectedCredentialAsync("Adobe"));
+    }
+
+    [Fact]
     public async Task AddCredentialAsync_ReturnsGuidAccountId()
     {
         if (_skip) return;
