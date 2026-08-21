@@ -91,7 +91,37 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Libsecret
             var label = $"{_appIdentifier}: {providerName}/{accountName}";
 
             StoreItem(attrs, label, credentialData);
+
+            // A just-stored Secret Service item isn't always immediately visible
+            // to a follow-up search under concurrent access, so a caller doing
+            // add-then-select/delete can race the item's appearance. Confirm it's
+            // queryable before returning so that can't happen.
+            ConfirmItemVisible(providerName, accountId);
+
             return Task.FromResult(accountId);
+        }
+
+        /// <summary>
+        /// Polls for a just-stored item to become visible to a Secret Service
+        /// lookup, closing the brief store-visibility window. Best-effort:
+        /// returns after a bounded wait even if the item never appears, leaving
+        /// any genuine failure to the caller's own lookup.
+        /// </summary>
+        private void ConfirmItemVisible(string providerName, string accountId)
+        {
+            const int maxAttempts = 20;
+            for (var attempt = 1; attempt <= maxAttempts; attempt++)
+            {
+                if (LookupCredentialByAccountId(providerName, accountId) is not null)
+                {
+                    return;
+                }
+
+                if (attempt < maxAttempts)
+                {
+                    Thread.Sleep(25);
+                }
+            }
         }
 
         /// <inheritdoc />
