@@ -38,6 +38,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`TODO.md` retired; its backlog moved to GitHub issues.** Completed items shipped in
+  this cycle (the flaky secret-store delete test, keystore format versioning, and
+  zero-on-dispose — see above). Remaining items that need an environment or a
+  NextIteration.Standards change were migrated to issues: Keychain ACL hardening (#18),
+  libsecret KWallet validation (#19), macOS CI version matrix (#20), splitting the Linux
+  keyring CI job (#21), and a repo-wide `Path.Combine` → `Path.Join` sweep (#24). Decision
+  recorded: the macOS Keychain and Linux libsecret backends stay **opt-in** while marked
+  experimental (revisit when that tag is dropped), as already documented on
+  `CredentialStoreOptions.UseKeychain` / `UseKeyring`.
+
 - **`.keystore` files now carry a format header (magic + 1-byte version).** A future
   KDF/format change can now be detected and rejected with a clear "unsupported keystore
   format version" error instead of surfacing as an opaque integrity-check failure.
