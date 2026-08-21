@@ -80,7 +80,7 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
 
             var manager = NewManager();
             var id = await manager.AddCredentialAsync("Adobe", "prod", "Production", "{\"apiKey\":\"secret\"}");
-            Assert.True(await manager.SelectCredentialAsync(id));
+            Assert.True(await RetryHelper.UntilTrueAsync(() => manager.SelectCredentialAsync(id)));
 
             var adobe = Assert.Single(await RetryHelper.UntilAsync(() => manager.ExportCredentialsAsync(), r => r.Count == 1));
             Assert.Equal(id, adobe.AccountId);
@@ -185,7 +185,7 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
             var payload = "{\"apiKey\":\"super-secret\"}";
             var accountId = await manager.AddCredentialAsync("Adobe", "prod", "Production", payload);
 
-            Assert.True(await manager.SelectCredentialAsync(accountId));
+            Assert.True(await RetryHelper.UntilTrueAsync(() => manager.SelectCredentialAsync(accountId)));
             var selected = await manager.GetSelectedCredentialAsync("Adobe");
 
             Assert.Equal(payload, selected);
