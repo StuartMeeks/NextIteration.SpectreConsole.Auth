@@ -181,7 +181,7 @@ public sealed class LocalFileCredentialEncryptionTests
     {
         using var temp = new TempDir();
         var encryption = new LocalFileCredentialEncryption(temp.Path);
-        var keystorePath = Path.Combine(temp.Path, ".keystore");
+        var keystorePath = Path.Join(temp.Path, ".keystore");
 
         Assert.False(File.Exists(keystorePath), "keystore should not exist before first encrypt/decrypt");
 
@@ -257,7 +257,7 @@ public sealed class LocalFileCredentialEncryptionTests
         // Delete the keystore and create a new instance with a different
         // entropy — the new instance will write a fresh keystore and fail
         // to decrypt the old ciphertext.
-        File.Delete(Path.Combine(temp.Path, ".keystore"));
+        File.Delete(Path.Join(temp.Path, ".keystore"));
         var entropyB = "entropy-bravo"u8.ToArray();
         var wrongEntropy = new LocalFileCredentialEncryption(temp.Path, entropyB);
 
@@ -354,7 +354,7 @@ public sealed class LocalFileCredentialEncryptionTests
 
         _ = await encryption.EncryptAsync("trigger keystore creation");
 
-        var bytes = await File.ReadAllBytesAsync(Path.Combine(temp.Path, ".keystore"), TestContext.Current.CancellationToken);
+        var bytes = await File.ReadAllBytesAsync(Path.Join(temp.Path, ".keystore"), TestContext.Current.CancellationToken);
         Assert.True(bytes.Length > KeystoreMagic.Length + 1);
         Assert.Equal(KeystoreMagic, bytes[..KeystoreMagic.Length]);
         Assert.Equal(1, bytes[KeystoreMagic.Length]); // format version
@@ -364,7 +364,7 @@ public sealed class LocalFileCredentialEncryptionTests
     public async Task Keystore_LegacyHeaderless_IsStillReadable()
     {
         using var temp = new TempDir();
-        var keystorePath = Path.Combine(temp.Path, ".keystore");
+        var keystorePath = Path.Join(temp.Path, ".keystore");
 
         // Produce a keystore, then strip its header to reconstruct the legacy
         // headerless on-disk shape a pre-header library version would have
@@ -384,7 +384,7 @@ public sealed class LocalFileCredentialEncryptionTests
     public async Task Keystore_UnknownFormatVersion_ThrowsClearError()
     {
         using var temp = new TempDir();
-        var keystorePath = Path.Combine(temp.Path, ".keystore");
+        var keystorePath = Path.Join(temp.Path, ".keystore");
 
         var writer = new LocalFileCredentialEncryption(temp.Path);
         _ = await writer.EncryptAsync("anything");
