@@ -11,7 +11,7 @@ public sealed class CredentialsDirectoryTests
     public void Ensure_CreatesDirectory_WhenMissing()
     {
         using var temp = new TempDir();
-        var target = Path.Combine(temp.Path, "creds");
+        var target = Path.Join(temp.Path, "creds");
         Assert.False(Directory.Exists(target));
 
         CredentialsDirectory.Ensure(target);
@@ -23,7 +23,7 @@ public sealed class CredentialsDirectoryTests
     public void Ensure_CreatesNestedDirectory_WhenParentMissing()
     {
         using var temp = new TempDir();
-        var target = Path.Combine(temp.Path, "nested", "creds");
+        var target = Path.Join(temp.Path, "nested", "creds");
         Assert.False(Directory.Exists(target));
 
         CredentialsDirectory.Ensure(target);
@@ -35,12 +35,12 @@ public sealed class CredentialsDirectoryTests
     public void Ensure_NoOp_WhenDirectoryAlreadyExists()
     {
         using var temp = new TempDir();
-        var target = Path.Combine(temp.Path, "creds");
+        var target = Path.Join(temp.Path, "creds");
         Directory.CreateDirectory(target);
 
         // Touch a marker file inside so we can verify the directory isn't
         // recreated (which would wipe contents).
-        var marker = Path.Combine(target, "marker.txt");
+        var marker = Path.Join(target, "marker.txt");
         File.WriteAllText(marker, "hello");
 
         CredentialsDirectory.Ensure(target);
@@ -59,7 +59,7 @@ public sealed class CredentialsDirectoryTests
         }
 
         using var temp = new TempDir();
-        var target = Path.Combine(temp.Path, "creds");
+        var target = Path.Join(temp.Path, "creds");
 
         CredentialsDirectory.Ensure(target);
 
@@ -78,7 +78,7 @@ public sealed class CredentialsDirectoryTests
         }
 
         using var temp = new TempDir();
-        var target = Path.Combine(temp.Path, "creds");
+        var target = Path.Join(temp.Path, "creds");
         Directory.CreateDirectory(target);
 
         // A deliberately-permissive mode that the library would never choose.

@@ -115,7 +115,7 @@ namespace NextIteration.SpectreConsole.Auth.Encryption
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(credentialsDirectory);
 
-            _keyFile = Path.Combine(credentialsDirectory, ".keystore");
+            _keyFile = Path.Join(credentialsDirectory, ".keystore");
 
             // PBKDF2 salt — non-secret, stable per machine/user. Caller
             // entropy is mixed into the password side instead of the salt
@@ -150,9 +150,17 @@ namespace NextIteration.SpectreConsole.Auth.Encryption
                 // Mirrors the same passthrough in DecryptAsync.
                 throw;
             }
-            catch (Exception ex)
+            catch (CryptographicException ex)
             {
                 throw new InvalidOperationException("Failed to encrypt credential data.", ex);
+            }
+            catch (IOException ex)
+            {
+                throw new InvalidOperationException("Failed to read the keystore while encrypting credential data.", ex);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                throw new InvalidOperationException("Failed to read the keystore while encrypting credential data.", ex);
             }
         }
 
@@ -191,9 +199,17 @@ namespace NextIteration.SpectreConsole.Auth.Encryption
             {
                 throw;
             }
-            catch (Exception ex)
+            catch (CryptographicException ex)
             {
                 throw new InvalidOperationException("Failed to decrypt credential data.", ex);
+            }
+            catch (IOException ex)
+            {
+                throw new InvalidOperationException("Failed to read the keystore while decrypting credential data.", ex);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                throw new InvalidOperationException("Failed to read the keystore while decrypting credential data.", ex);
             }
         }
 

@@ -80,19 +80,13 @@ namespace NextIteration.SpectreConsole.Auth.Commands
 
             // Union of display-field keys across this provider's credentials,
             // preserving first-seen order so columns render in the order the
-            // summary provider intended.
-            var displayFieldKeys = new List<string>();
-            var seenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var credential in credentials)
-            {
-                foreach (var kvp in credential.DisplayFields)
-                {
-                    if (seenKeys.Add(kvp.Key))
-                    {
-                        displayFieldKeys.Add(kvp.Key);
-                    }
-                }
-            }
+            // summary provider intended. Distinct() yields first occurrences in
+            // source order, which is exactly the ordered de-duplication wanted.
+            var displayFieldKeys = credentials
+                .SelectMany(c => c.DisplayFields)
+                .Select(kvp => kvp.Key)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
 
             AnsiConsole.MarkupLine($"[bold]{Markup.Escape(provider)}[/]");
 

@@ -56,7 +56,7 @@ public sealed class FileCredentialManagerTests
 
         var accountId = await manager.AddCredentialAsync("Adobe", "prod", "Production", "{}");
 
-        var expected = Path.Combine(temp.Path, $"adobe_{accountId}.json");
+        var expected = Path.Join(temp.Path, $"adobe_{accountId}.json");
         Assert.True(File.Exists(expected), $"expected credential file at {expected}");
     }
 
@@ -68,8 +68,8 @@ public sealed class FileCredentialManagerTests
 
         var accountId = await manager.AddCredentialAsync("Adobe", "prod", "Production", "{}");
 
-        var upperPath = Path.Combine(temp.Path, $"Adobe_{accountId}.json");
-        var lowerPath = Path.Combine(temp.Path, $"adobe_{accountId}.json");
+        var upperPath = Path.Join(temp.Path, $"Adobe_{accountId}.json");
+        var lowerPath = Path.Join(temp.Path, $"adobe_{accountId}.json");
         Assert.True(File.Exists(lowerPath));
         // On case-insensitive filesystems this will also pass — we don't assert !File.Exists(upperPath).
         _ = upperPath;
@@ -279,7 +279,7 @@ public sealed class FileCredentialManagerTests
         using var temp = new TempDir();
         var manager = CreateManager(temp.Path);
         var accountId = await manager.AddCredentialAsync("Adobe", "prod", "Production", "{}");
-        var filePath = Path.Combine(temp.Path, $"adobe_{accountId}.json");
+        var filePath = Path.Join(temp.Path, $"adobe_{accountId}.json");
         Assert.True(File.Exists(filePath));
 
         var deleted = await manager.DeleteCredentialAsync(accountId);
@@ -379,7 +379,7 @@ public sealed class FileCredentialManagerTests
 
         var accountId = await manager.AddCredentialAsync("Adobe", "prod", "Production", "{}");
 
-        var filePath = Path.Combine(temp.Path, $"adobe_{accountId}.json");
+        var filePath = Path.Join(temp.Path, $"adobe_{accountId}.json");
         var mode = File.GetUnixFileMode(filePath);
         Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, mode);
     }
@@ -444,7 +444,7 @@ public sealed class FileCredentialManagerTests
         var manager = CreateManager(temp.Path);
         _ = await manager.AddCredentialAsync("Adobe", "prod", "Production", "{}");
 
-        // Malformed ids must not flow into Path.Combine / Directory.GetFiles
+        // Malformed ids must not flow into Path.Join / Directory.GetFiles
         // glob — they should resolve to a clean "not found".
         var result = await manager.DeleteCredentialAsync(accountId);
 

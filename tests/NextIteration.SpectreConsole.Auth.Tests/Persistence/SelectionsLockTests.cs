@@ -11,7 +11,7 @@ public sealed class SelectionsLockTests
     public async Task Acquire_WhenUncontended_Succeeds()
     {
         using var temp = new TempDir();
-        var lockPath = Path.Combine(temp.Path, "selections.json.lock");
+        var lockPath = Path.Join(temp.Path, "selections.json.lock");
 
         using var held = await SelectionsLock.AcquireAsync(lockPath, TestContext.Current.CancellationToken);
 
@@ -24,7 +24,7 @@ public sealed class SelectionsLockTests
     public async Task Acquire_WhenHeld_RetriesUntilReleased()
     {
         using var temp = new TempDir();
-        var lockPath = Path.Combine(temp.Path, "selections.json.lock");
+        var lockPath = Path.Join(temp.Path, "selections.json.lock");
 
         var first = await SelectionsLock.AcquireAsync(lockPath, TestContext.Current.CancellationToken);
 
@@ -48,7 +48,7 @@ public sealed class SelectionsLockTests
     public async Task Acquire_AfterRelease_Succeeds()
     {
         using var temp = new TempDir();
-        var lockPath = Path.Combine(temp.Path, "selections.json.lock");
+        var lockPath = Path.Join(temp.Path, "selections.json.lock");
 
         (await SelectionsLock.AcquireAsync(lockPath, TestContext.Current.CancellationToken)).Dispose();
 

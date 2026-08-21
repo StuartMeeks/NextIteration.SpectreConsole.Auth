@@ -377,14 +377,11 @@ public sealed class LibsecretCredentialManager : ICredentialManager
     private static void ValidateProviderName(string providerName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(providerName);
-        foreach (var c in providerName)
+        if (providerName.Any(c => !char.IsAsciiLetterOrDigit(c) && c != '.' && c != '_' && c != '-'))
         {
-            if (!char.IsAsciiLetterOrDigit(c) && c != '.' && c != '_' && c != '-')
-            {
-                throw new ArgumentException(
-                    $"Provider name '{providerName}' contains invalid characters. Allowed: ASCII letters, digits, '.', '_', '-'.",
-                    nameof(providerName));
-            }
+            throw new ArgumentException(
+                $"Provider name '{providerName}' contains invalid characters. Allowed: ASCII letters, digits, '.', '_', '-'.",
+                nameof(providerName));
         }
     }
 

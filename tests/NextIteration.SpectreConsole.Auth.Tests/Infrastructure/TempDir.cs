@@ -9,7 +9,7 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Infrastructure;
 internal sealed class TempDir : IDisposable
 {
     public string Path { get; } =
-        System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ni.sca.tests." + Guid.NewGuid().ToString("N"));
+        System.IO.Path.Join(System.IO.Path.GetTempPath(), "ni.sca.tests." + Guid.NewGuid().ToString("N"));
 
     public TempDir()
     {
