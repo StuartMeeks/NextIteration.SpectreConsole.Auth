@@ -409,7 +409,9 @@ public sealed class LocalFileCredentialEncryptionTests
     {
         using var temp = new TempDir();
         var entropy = new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 };
-        var encryption = new LocalFileCredentialEncryption(temp.Path, entropy);
+        // `using` guarantees disposal even if EncryptAsync throws; the explicit
+        // Dispose() calls below still exercise the zeroing + idempotency.
+        using var encryption = new LocalFileCredentialEncryption(temp.Path, entropy);
 
         _ = await encryption.EncryptAsync("ensure the data key is derived");
 
