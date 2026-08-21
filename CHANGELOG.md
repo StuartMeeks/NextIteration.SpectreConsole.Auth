@@ -38,6 +38,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Cleared the open CodeQL code-quality alerts.** All genuine fixes, no suppression
+  hacks:
+  - Repo-wide `Path.Combine` → `Path.Join` in `src` and `tests` (resolves #24). `Path.Join`
+    never treats a later segment as rooted, so it can't silently drop earlier arguments —
+    defence-in-depth for the credential/keystore path construction, which is already
+    input-validated.
+  - Idiomatic LINQ in place of filter-style loops: `providerName.Any(...)` for the
+    `ValidateProviderName` checks, `Distinct(OrdinalIgnoreCase)` for the `accounts list`
+    column-key union, and `.Where(...)` / `.FirstOrDefault(predicate)` in the Keychain
+    backend.
+  - Narrowed the exception handling in `DpapiCredentialEncryption` and
+    `LocalFileCredentialEncryption` from `catch (Exception)` to the specific types actually
+    expected (`CryptographicException`, `FormatException`, `IOException`,
+    `UnauthorizedAccessException`); a truly unexpected exception now propagates instead of
+    being masked as a generic encrypt/decrypt failure. The deliberately-broad boundary
+    catches (CLI command handlers, best-effort cleanup) are unchanged by design.
+
 - **`TODO.md` retired; its backlog moved to GitHub issues.** Completed items shipped in
   this cycle (the flaky secret-store delete test, keystore format versioning, and
   zero-on-dispose — see above). Remaining items that need an environment or a

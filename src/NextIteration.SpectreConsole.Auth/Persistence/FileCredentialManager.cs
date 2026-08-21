@@ -41,8 +41,8 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
 
             _encryption = encryption;
             _credentialsDirectory = credentialsDirectory;
-            _selectionFile = Path.Combine(_credentialsDirectory, "selections.json");
-            _selectionLockFile = Path.Combine(_credentialsDirectory, "selections.json.lock");
+            _selectionFile = Path.Join(_credentialsDirectory, "selections.json");
+            _selectionLockFile = Path.Join(_credentialsDirectory, "selections.json.lock");
             _summaryProviders = (summaryProviders ?? [])
                 .ToDictionary(p => p.ProviderName, StringComparer.OrdinalIgnoreCase);
 
@@ -128,7 +128,7 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
             };
 
             var fileName = $"{providerName.ToLowerInvariant()}_{accountId}.json";
-            var filePath = Path.Combine(_credentialsDirectory, fileName);
+            var filePath = Path.Join(_credentialsDirectory, fileName);
 
             var json = JsonSerializer.Serialize(credential, _jsonOptions);
 
@@ -200,7 +200,7 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
             {
                 // A non-GUID id can only land here via tampered selections.json;
                 // treat it as "no selection" rather than letting a malformed
-                // string flow into Path.Combine.
+                // string flow into Path.Join.
                 return null;
             }
 
@@ -228,7 +228,7 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
         private async Task<string?> ReadAndDecryptByIdAsync(string providerName, string accountId)
         {
             var fileName = $"{providerName.ToLowerInvariant()}_{accountId}.json";
-            var filePath = Path.Combine(_credentialsDirectory, fileName);
+            var filePath = Path.Join(_credentialsDirectory, fileName);
             if (!File.Exists(filePath))
             {
                 return null;
@@ -379,7 +379,7 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
             };
 
             var fileName = $"{credential.ProviderName.ToLowerInvariant()}_{credential.AccountId}.json";
-            var filePath = Path.Combine(_credentialsDirectory, fileName);
+            var filePath = Path.Join(_credentialsDirectory, fileName);
 
             var json = JsonSerializer.Serialize(stored, _jsonOptions);
 
@@ -409,14 +409,11 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(providerName);
 
-            foreach (var c in providerName)
+            if (providerName.Any(c => !char.IsAsciiLetterOrDigit(c) && c != '.' && c != '_' && c != '-'))
             {
-                if (!char.IsAsciiLetterOrDigit(c) && c != '.' && c != '_' && c != '-')
-                {
-                    throw new ArgumentException(
-                        $"Provider name '{providerName}' contains invalid characters. Allowed: ASCII letters, digits, '.', '_', '-'.",
-                        nameof(providerName));
-                }
+                throw new ArgumentException(
+                    $"Provider name '{providerName}' contains invalid characters. Allowed: ASCII letters, digits, '.', '_', '-'.",
+                    nameof(providerName));
             }
         }
 

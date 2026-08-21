@@ -40,7 +40,7 @@ namespace NextIteration.SpectreConsole.Auth.Encryption
 
                 return Task.FromResult(Convert.ToBase64String(encryptedBytes));
             }
-            catch (Exception ex)
+            catch (CryptographicException ex)
             {
                 throw new InvalidOperationException("Failed to encrypt credential data", ex);
             }
@@ -62,7 +62,11 @@ namespace NextIteration.SpectreConsole.Auth.Encryption
 
                 return Task.FromResult(Encoding.UTF8.GetString(decryptedBytes));
             }
-            catch (Exception ex)
+            catch (FormatException ex)
+            {
+                throw new InvalidOperationException("Encrypted credential data is not valid base64.", ex);
+            }
+            catch (CryptographicException ex)
             {
                 throw new InvalidOperationException("Failed to decrypt credential data", ex);
             }

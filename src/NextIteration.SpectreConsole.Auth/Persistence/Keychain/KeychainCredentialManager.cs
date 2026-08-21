@@ -209,16 +209,17 @@ public sealed class KeychainCredentialManager : ICredentialManager
         var items = QueryAllItemsForApp(includeData: true);
         var selectionCache = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
 
-        var exports = new List<CredentialExport>();
-        foreach (var item in items)
-        {
-            // Skip the selection records; only real credential items are exported.
-            if (item.Service.EndsWith(SelectionsServiceSuffix, StringComparison.Ordinal))
-                continue;
+        // Only real credential items are exported: skip the selection records,
+        // and any item whose service/account doesn't resolve to a credential.
+        var credentialItems = items.Where(i =>
+            !i.Service.EndsWith(SelectionsServiceSuffix, StringComparison.Ordinal)
+            && i.Account is not null
+            && ProviderNameFromService(i.Service) is not null);
 
-            var providerName = ProviderNameFromService(item.Service);
-            if (providerName is null || item.Account is null)
-                continue;
+        var exports = new List<CredentialExport>();
+        foreach (var item in credentialItems)
+        {
+            var providerName = ProviderNameFromService(item.Service)!;
 
             if (!selectionCache.TryGetValue(providerName, out var selectedId))
             {
@@ -228,7 +229,7 @@ public sealed class KeychainCredentialManager : ICredentialManager
 
             exports.Add(new CredentialExport
             {
-                AccountId = item.Account,
+                AccountId = item.Account!, // non-null: guaranteed by the Where filter above
                 AccountName = item.Label ?? string.Empty,
                 ProviderName = providerName,
                 Environment = item.Description ?? string.Empty,
@@ -331,16 +332,12 @@ public sealed class KeychainCredentialManager : ICredentialManager
         // Enumerate all app-owned items; pick the one whose account matches.
         // Keychain doesn't index on account alone across services, so this
         // is a linear scan — acceptable because credential counts are tiny.
-        var items = QueryAllItemsForApp(includeData: false);
-        foreach (var item in items)
-        {
-            if (string.Equals(item.Account, accountId, StringComparison.OrdinalIgnoreCase)
-                && !item.Service.EndsWith(SelectionsServiceSuffix, StringComparison.Ordinal))
-            {
-                return (item.Service, item.Account);
-            }
-        }
-        return null;
+        var match = QueryAllItemsForApp(includeData: false)
+            .FirstOrDefault(item =>
+                string.Equals(item.Account, accountId, StringComparison.OrdinalIgnoreCase)
+                && !item.Service.EndsWith(SelectionsServiceSuffix, StringComparison.Ordinal));
+
+        return match is null ? null : (match.Service, match.Account);
     }
 
     // =========================
@@ -351,14 +348,11 @@ public sealed class KeychainCredentialManager : ICredentialManager
     private static void ValidateProviderName(string providerName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(providerName);
-        foreach (var c in providerName)
+        if (providerName.Any(c => !char.IsAsciiLetterOrDigit(c) && c != '.' && c != '_' && c != '-'))
         {
-            if (!char.IsAsciiLetterOrDigit(c) && c != '.' && c != '_' && c != '-')
-            {
-                throw new ArgumentException(
-                    $"Provider name '{providerName}' contains invalid characters. Allowed: ASCII letters, digits, '.', '_', '-'.",
-                    nameof(providerName));
-            }
+            throw new ArgumentException(
+                $"Provider name '{providerName}' contains invalid characters. Allowed: ASCII letters, digits, '.', '_', '-'.",
+                nameof(providerName));
         }
     }
 

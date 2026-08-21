@@ -11,7 +11,7 @@ public sealed class AtomicFileTests
     public async Task WriteAllTextAsync_WritesExpectedContent()
     {
         using var temp = new TempDir();
-        var target = Path.Combine(temp.Path, "file.txt");
+        var target = Path.Join(temp.Path, "file.txt");
 
         await AtomicFile.WriteAllTextAsync(target, "hello");
 
@@ -22,7 +22,7 @@ public sealed class AtomicFileTests
     public async Task WriteAllBytesAsync_WritesExpectedBytes()
     {
         using var temp = new TempDir();
-        var target = Path.Combine(temp.Path, "file.bin");
+        var target = Path.Join(temp.Path, "file.bin");
         var payload = new byte[] { 0x00, 0x01, 0x02, 0xFE, 0xFF };
 
         await AtomicFile.WriteAllBytesAsync(target, payload);
@@ -34,7 +34,7 @@ public sealed class AtomicFileTests
     public async Task WriteAllTextAsync_NoTempFileLeftBehindAfterSuccess()
     {
         using var temp = new TempDir();
-        var target = Path.Combine(temp.Path, "file.txt");
+        var target = Path.Join(temp.Path, "file.txt");
 
         await AtomicFile.WriteAllTextAsync(target, "hello");
 
@@ -48,7 +48,7 @@ public sealed class AtomicFileTests
     public async Task WriteAllTextAsync_OverwritesExisting()
     {
         using var temp = new TempDir();
-        var target = Path.Combine(temp.Path, "file.txt");
+        var target = Path.Join(temp.Path, "file.txt");
         await File.WriteAllTextAsync(target, "original", TestContext.Current.CancellationToken);
 
         await AtomicFile.WriteAllTextAsync(target, "replaced");
@@ -63,7 +63,7 @@ public sealed class AtomicFileTests
         // a concurrent observer should see either the old content or the new
         // content — never an empty/half-written target.
         using var temp = new TempDir();
-        var target = Path.Combine(temp.Path, "file.txt");
+        var target = Path.Join(temp.Path, "file.txt");
         await File.WriteAllTextAsync(target, "original", TestContext.Current.CancellationToken);
 
         // Hard to probe the race deterministically, so at minimum assert
@@ -82,7 +82,7 @@ public sealed class AtomicFileTests
         }
 
         using var temp = new TempDir();
-        var target = Path.Combine(temp.Path, "file.txt");
+        var target = Path.Join(temp.Path, "file.txt");
 
         await AtomicFile.WriteAllTextAsync(
             target,
@@ -97,7 +97,7 @@ public sealed class AtomicFileTests
     public async Task WriteAllTextAsync_NullUnixMode_DoesNotThrow()
     {
         using var temp = new TempDir();
-        var target = Path.Combine(temp.Path, "file.txt");
+        var target = Path.Join(temp.Path, "file.txt");
 
         await AtomicFile.WriteAllTextAsync(target, "hello", unixMode: null);
 
@@ -112,7 +112,7 @@ public sealed class AtomicFileTests
         // last-rename-wins semantic means both succeed; only one final
         // content persists.
         using var temp = new TempDir();
-        var target = Path.Combine(temp.Path, "file.txt");
+        var target = Path.Join(temp.Path, "file.txt");
 
         var tasks = new[]
         {
