@@ -113,7 +113,7 @@ public sealed class LibsecretCredentialManagerTests : IDisposable
         var id = await manager.AddCredentialAsync("Adobe", "prod", "Production", "{\"apiKey\":\"secret\"}");
         Assert.True(await manager.SelectCredentialAsync(id));
 
-        var adobe = Assert.Single(await manager.ExportCredentialsAsync());
+        var adobe = Assert.Single(await RetryHelper.UntilAsync(() => manager.ExportCredentialsAsync(), r => r.Count == 1));
         Assert.Equal(id, adobe.AccountId);
         Assert.Equal("prod", adobe.AccountName);
         Assert.Equal("Adobe", adobe.ProviderName);
@@ -129,13 +129,13 @@ public sealed class LibsecretCredentialManagerTests : IDisposable
         var manager = NewManager();
         var id = await manager.AddCredentialAsync("Adobe", "prod", "Production", "{\"apiKey\":\"secret\"}");
         _ = await manager.SelectCredentialAsync(id);
-        var exported = Assert.Single(await manager.ExportCredentialsAsync());
+        var exported = Assert.Single(await RetryHelper.UntilAsync(() => manager.ExportCredentialsAsync(), r => r.Count == 1));
 
         // Simulate an import: drop it, then restore from the export record.
         Assert.True(await RetryHelper.UntilTrueAsync(() => manager.DeleteCredentialAsync(id)));
         await manager.RestoreCredentialAsync(exported);
 
-        var restored = Assert.Single(await manager.ExportCredentialsAsync());
+        var restored = Assert.Single(await RetryHelper.UntilAsync(() => manager.ExportCredentialsAsync(), r => r.Count == 1));
         Assert.Equal(id, restored.AccountId);
         Assert.Equal(exported.CreatedAt, restored.CreatedAt); // libsecret preserves it via attribute
         Assert.True(restored.IsSelected);

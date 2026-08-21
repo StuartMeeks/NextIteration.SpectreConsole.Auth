@@ -38,4 +38,29 @@ internal static class RetryHelper
 
         return false;
     }
+
+    /// <summary>
+    /// Invokes <paramref name="action"/> until its result satisfies
+    /// <paramref name="predicate"/> or the attempts are exhausted, and returns
+    /// that result. Used for read-after-write against the OS secret stores,
+    /// where a just-completed add isn't always immediately visible to the next
+    /// query under concurrent (multi-targeted) test runs. Returns the last
+    /// result even if the predicate never held, so the caller's assertion still
+    /// reports the real failure rather than a timeout.
+    /// </summary>
+    internal static async Task<T> UntilAsync<T>(
+        Func<Task<T>> action,
+        Func<T, bool> predicate,
+        int maxAttempts = 20,
+        int delayMs = 25)
+    {
+        var result = await action();
+        for (var attempt = 1; !predicate(result) && attempt < maxAttempts; attempt++)
+        {
+            await Task.Delay(delayMs);
+            result = await action();
+        }
+
+        return result;
+    }
 }
