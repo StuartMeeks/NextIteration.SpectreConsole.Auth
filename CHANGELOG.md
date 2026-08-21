@@ -38,6 +38,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Adopted the revised canonical `.editorconfig`** (NextIteration.Standards §5.2). The new
+  file is a deliberate allow-list of gated style rules (no blanket
+  `dotnet_analyzer_diagnostic.severity`) and fixes the private-field naming rule that had
+  demanded `_camelCase` for `PascalCase` constants. `EnforceCodeStyleInBuild` stays **off**
+  per §1.2.1 (blocked estate-wide), so the `IDE*` rules remain advisory at build time; the
+  one build-affecting change is `CS1591` moving from `silent` to `warning` (a missing XML
+  doc on a public member is now a build error under `TreatWarningsAsErrors` — the public
+  surface is already fully documented, so the build stays clean).
+
 - **Cleared the open CodeQL code-quality alerts.** All genuine fixes, no suppression
   hacks:
   - Repo-wide `Path.Combine` → `Path.Join` in `src` and `tests` (resolves #24). `Path.Join`
