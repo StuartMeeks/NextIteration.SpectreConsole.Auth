@@ -38,6 +38,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **CodeQL now excludes the two P/Invoke audit queries at the config level** (NextIteration.Standards
+  §4.4). A `query-filters` block in `codeql.yml` excludes exactly `cs/unmanaged-code` and
+  `cs/call-to-unmanaged-code` — audit queries that fire on every P/Invoke into Keychain,
+  libsecret, and DPAPI and that no code change can resolve (native interop is the point).
+  Every other `security-and-quality` query still runs on the interop files, so no real
+  finding is lost. This replaces the per-alert *won't fix* dismissals, which reopened
+  whenever a reformat shifted a line number.
+
 - **Enabled `EnforceCodeStyleInBuild`** (NextIteration.Standards §1.2.1, now a `MUST`). The
   canonical `.editorconfig`'s gated rules now fail the build instead of merely showing in
   the IDE, so the house style is enforced. Bringing the code green under the flag was a
