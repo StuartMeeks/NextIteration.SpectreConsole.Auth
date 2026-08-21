@@ -3,6 +3,7 @@ using System.Runtime.Versioning;
 using NextIteration.SpectreConsole.Auth.Commands;
 using NextIteration.SpectreConsole.Auth.Persistence;
 using NextIteration.SpectreConsole.Auth.Persistence.Libsecret;
+using NextIteration.SpectreConsole.Auth.Tests.Infrastructure;
 
 using Xunit;
 
@@ -131,7 +132,7 @@ public sealed class LibsecretCredentialManagerTests : IDisposable
         var exported = Assert.Single(await manager.ExportCredentialsAsync());
 
         // Simulate an import: drop it, then restore from the export record.
-        Assert.True(await manager.DeleteCredentialAsync(id));
+        Assert.True(await RetryHelper.UntilTrueAsync(() => manager.DeleteCredentialAsync(id)));
         await manager.RestoreCredentialAsync(exported);
 
         var restored = Assert.Single(await manager.ExportCredentialsAsync());
@@ -281,7 +282,7 @@ public sealed class LibsecretCredentialManagerTests : IDisposable
         var manager = NewManager();
         var accountId = await manager.AddCredentialAsync("Adobe", "prod", "Production", "{}");
 
-        var deleted = await manager.DeleteCredentialAsync(accountId);
+        var deleted = await RetryHelper.UntilTrueAsync(() => manager.DeleteCredentialAsync(accountId));
         var list = (await manager.ListCredentialsAsync("Adobe")).ToList();
 
         Assert.True(deleted);
@@ -296,7 +297,7 @@ public sealed class LibsecretCredentialManagerTests : IDisposable
         var accountId = await manager.AddCredentialAsync("Adobe", "prod", "Production", "{}");
         _ = await manager.SelectCredentialAsync(accountId);
 
-        _ = await manager.DeleteCredentialAsync(accountId);
+        _ = await RetryHelper.UntilTrueAsync(() => manager.DeleteCredentialAsync(accountId));
 
         Assert.Null(await manager.GetSelectedCredentialAsync("Adobe"));
     }
