@@ -74,7 +74,38 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Keychain
             };
 
             AddItem(attrs);
+
+            // SecItemAdd can lag SecItemCopyMatching visibility under concurrent
+            // keychain access, so a caller doing add-then-select/delete — e.g.
+            // `accounts add` offering to activate the new credential — can race
+            // the item's own appearance and see the follow-up lookup miss it.
+            // Confirm the item is queryable before returning so that can't happen.
+            ConfirmItemVisible(attrs.Service, accountId);
+
             return Task.FromResult(accountId);
+        }
+
+        /// <summary>
+        /// Polls for a just-added item to become visible to
+        /// <c>SecItemCopyMatching</c>, closing the brief add-visibility window.
+        /// Best-effort: returns after a bounded wait even if the item never
+        /// appears, leaving any genuine failure to the caller's own lookup.
+        /// </summary>
+        private static void ConfirmItemVisible(string service, string account)
+        {
+            const int maxAttempts = 20;
+            for (var attempt = 1; attempt <= maxAttempts; attempt++)
+            {
+                if (QuerySingleItem(service, account, includeData: false) is not null)
+                {
+                    return;
+                }
+
+                if (attempt < maxAttempts)
+                {
+                    Thread.Sleep(25);
+                }
+            }
         }
 
         /// <inheritdoc />
