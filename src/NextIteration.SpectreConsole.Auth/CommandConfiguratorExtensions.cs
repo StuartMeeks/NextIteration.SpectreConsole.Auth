@@ -37,6 +37,15 @@ namespace NextIteration.SpectreConsole.Auth
                     .WithDescription("Select an active credential")
                     .WithExample("accounts", "select", "12345678-1234-1234-1234-123456789012")
                     .WithExample("accounts", "select");
+
+                accounts.AddCommand<ExportCredentialsCommand>("export")
+                    .WithDescription("Export all credentials to an encrypted archive")
+                    .WithExample("accounts", "export", "credentials.bundle");
+
+                accounts.AddCommand<ImportCredentialsCommand>("import")
+                    .WithDescription("Import credentials from an encrypted archive")
+                    .WithExample("accounts", "import", "credentials.bundle")
+                    .WithExample("accounts", "import", "credentials.bundle", "--on-conflict", "overwrite");
             });
 
             return configurator;

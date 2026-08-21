@@ -306,6 +306,100 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
             return providers.OrderBy(p => p);
         }
 
+        /// <inheritdoc />
+        public async Task<IReadOnlyList<CredentialExport>> ExportCredentialsAsync()
+        {
+            // Every *.json in the directory except the selection record is a
+            // stored credential; mirrors the glob GetProviderNamesAsync uses.
+            var credentialFiles = Directory.GetFiles(_credentialsDirectory, "*.json")
+                .Where(f => !f.Equals(_selectionFile, StringComparison.OrdinalIgnoreCase));
+
+            var selections = await LoadSelectionsAsync().ConfigureAwait(false);
+            var exports = new List<CredentialExport>();
+
+            foreach (var file in credentialFiles)
+            {
+                StoredCredential? credential;
+                try
+                {
+                    var content = await File.ReadAllTextAsync(file).ConfigureAwait(false);
+                    credential = JsonSerializer.Deserialize<StoredCredential>(content, _jsonOptions);
+                }
+                catch (JsonException)
+                {
+                    // Skip invalid JSON files (e.g. a stray .tmp that lost its race).
+                    continue;
+                }
+
+                if (credential is null)
+                {
+                    continue;
+                }
+
+                var isSelected = selections.TryGetValue(credential.ProviderName, out var selectedId) &&
+                    selectedId.Equals(credential.AccountId, StringComparison.OrdinalIgnoreCase);
+
+                var decrypted = await _encryption.DecryptAsync(credential.CredentialData).ConfigureAwait(false);
+
+                exports.Add(new CredentialExport
+                {
+                    AccountId = credential.AccountId,
+                    AccountName = credential.AccountName,
+                    ProviderName = credential.ProviderName,
+                    Environment = credential.Environment,
+                    CredentialData = decrypted,
+                    CreatedAt = credential.CreatedAt,
+                    IsSelected = isSelected,
+                });
+            }
+
+            return exports;
+        }
+
+        /// <inheritdoc />
+        public async Task RestoreCredentialAsync(CredentialExport credential)
+        {
+            ArgumentNullException.ThrowIfNull(credential);
+
+            // credential comes from an imported archive — untrusted input, so
+            // both fields that flow into the file path are validated before use.
+            ValidateProviderName(credential.ProviderName);
+            ValidateAccountId(credential.AccountId);
+
+            var encryptedCredentialData = await _encryption.EncryptAsync(credential.CredentialData).ConfigureAwait(false);
+
+            var stored = new StoredCredential
+            {
+                AccountId = credential.AccountId,
+                AccountName = credential.AccountName,
+                ProviderName = credential.ProviderName,
+                Environment = credential.Environment,
+                CredentialData = encryptedCredentialData,
+                CreatedAt = credential.CreatedAt,
+            };
+
+            var fileName = $"{credential.ProviderName.ToLowerInvariant()}_{credential.AccountId}.json";
+            var filePath = Path.Combine(_credentialsDirectory, fileName);
+
+            var json = JsonSerializer.Serialize(stored, _jsonOptions);
+
+            // Atomic write to the deterministic path replaces any existing
+            // credential with the same provider + account id, so a re-import
+            // is idempotent rather than duplicating.
+            await AtomicFile.WriteAllTextAsync(
+                filePath,
+                json,
+                OperatingSystem.IsWindows() ? null : UnixFileMode.UserRead | UnixFileMode.UserWrite).ConfigureAwait(false);
+
+            if (credential.IsSelected)
+            {
+                using var selectionsLock = await SelectionsLock.AcquireAsync(_selectionLockFile).ConfigureAwait(false);
+                var selections = await LoadSelectionsAsync().ConfigureAwait(false);
+                selections[credential.ProviderName] = credential.AccountId;
+                await SaveSelectionsAsync(selections).ConfigureAwait(false);
+            }
+        }
+
         /// <summary>
         /// Restricts the set of characters allowed in a provider name so it is
         /// safe to use as a filename prefix. Prevents path-traversal attacks

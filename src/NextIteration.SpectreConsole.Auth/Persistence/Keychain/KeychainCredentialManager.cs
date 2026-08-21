@@ -203,6 +203,80 @@ public sealed class KeychainCredentialManager : ICredentialManager
         return Task.FromResult<IEnumerable<string>>(names);
     }
 
+    /// <inheritdoc />
+    public Task<IReadOnlyList<CredentialExport>> ExportCredentialsAsync()
+    {
+        var items = QueryAllItemsForApp(includeData: true);
+        var selectionCache = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+
+        var exports = new List<CredentialExport>();
+        foreach (var item in items)
+        {
+            // Skip the selection records; only real credential items are exported.
+            if (item.Service.EndsWith(SelectionsServiceSuffix, StringComparison.Ordinal))
+                continue;
+
+            var providerName = ProviderNameFromService(item.Service);
+            if (providerName is null || item.Account is null)
+                continue;
+
+            if (!selectionCache.TryGetValue(providerName, out var selectedId))
+            {
+                selectedId = ReadSelection(providerName);
+                selectionCache[providerName] = selectedId;
+            }
+
+            exports.Add(new CredentialExport
+            {
+                AccountId = item.Account,
+                AccountName = item.Label ?? string.Empty,
+                ProviderName = providerName,
+                Environment = item.Description ?? string.Empty,
+                CredentialData = item.Data is not null ? Encoding.UTF8.GetString(item.Data) : string.Empty,
+                CreatedAt = item.CreatedAt ?? DateTime.MinValue,
+                IsSelected = selectedId is not null && string.Equals(selectedId, item.Account, StringComparison.OrdinalIgnoreCase),
+            });
+        }
+
+        return Task.FromResult<IReadOnlyList<CredentialExport>>(exports);
+    }
+
+    /// <inheritdoc />
+    public Task RestoreCredentialAsync(CredentialExport credential)
+    {
+        ArgumentNullException.ThrowIfNull(credential);
+        ValidateProviderName(credential.ProviderName);
+        ValidateAccountId(credential.AccountId);
+
+        var service = ServiceFor(credential.ProviderName);
+
+        // Replace any existing item with the same service + account id so a
+        // re-import is idempotent. Keychain has no atomic upsert, so delete
+        // then add — the creation date is reassigned by macOS regardless, so
+        // CreatedAt is intentionally not carried across.
+        var existing = QuerySingleItem(service, credential.AccountId, includeData: false);
+        if (existing is not null)
+        {
+            DeleteItem(service, credential.AccountId);
+        }
+
+        AddItem(new KeychainItem
+        {
+            Service = service,
+            Account = credential.AccountId,
+            Label = credential.AccountName,
+            Description = credential.Environment,
+            Data = Encoding.UTF8.GetBytes(credential.CredentialData),
+        });
+
+        if (credential.IsSelected)
+        {
+            WriteSelection(credential.ProviderName, credential.AccountId);
+        }
+
+        return Task.CompletedTask;
+    }
+
     // =========================
     // Internal helpers
     // =========================
