@@ -25,7 +25,9 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
         internal static void Ensure(string path)
         {
             if (Directory.Exists(path))
+            {
                 return;
+            }
 
             if (OperatingSystem.IsWindows())
             {

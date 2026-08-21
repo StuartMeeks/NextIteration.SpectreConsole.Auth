@@ -1,4 +1,5 @@
 using NextIteration.SpectreConsole.Auth.Commands;
+
 using Spectre.Console.Cli;
 
 namespace NextIteration.SpectreConsole.Auth

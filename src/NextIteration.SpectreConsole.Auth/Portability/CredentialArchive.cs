@@ -48,7 +48,7 @@ namespace NextIteration.SpectreConsole.Auth.Portability
             var payload = new ArchivePayload
             {
                 ExportedAtUtc = DateTime.UtcNow,
-                Credentials = credentials.Select(ArchiveCredential.From).ToList(),
+                Credentials = [.. credentials.Select(ArchiveCredential.From)],
             };
 
             var plaintext = JsonSerializer.SerializeToUtf8Bytes(payload, _jsonOptions);
@@ -152,7 +152,7 @@ namespace NextIteration.SpectreConsole.Auth.Portability
             {
                 var payload = JsonSerializer.Deserialize<ArchivePayload>(plaintext, _jsonOptions);
                 var credentials = payload?.Credentials ?? [];
-                return credentials.Select(c => c.ToExport()).ToList();
+                return [.. credentials.Select(c => c.ToExport())];
             }
             catch (JsonException ex)
             {

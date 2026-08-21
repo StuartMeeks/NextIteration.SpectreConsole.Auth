@@ -1,6 +1,7 @@
-using NextIteration.SpectreConsole.Auth.Persistence;
 using System.Security.Cryptography;
 using System.Text;
+
+using NextIteration.SpectreConsole.Auth.Persistence;
 
 namespace NextIteration.SpectreConsole.Auth.Encryption
 {
@@ -134,7 +135,9 @@ namespace NextIteration.SpectreConsole.Auth.Encryption
         public async Task<string> EncryptAsync(string plainText)
         {
             if (string.IsNullOrEmpty(plainText))
+            {
                 return string.Empty;
+            }
 
             try
             {
@@ -168,7 +171,9 @@ namespace NextIteration.SpectreConsole.Auth.Encryption
         public async Task<string> DecryptAsync(string encryptedText)
         {
             if (string.IsNullOrEmpty(encryptedText))
+            {
                 return string.Empty;
+            }
 
             byte[] input;
             try
@@ -338,7 +343,9 @@ namespace NextIteration.SpectreConsole.Auth.Encryption
         private static byte[] DecryptWithGcm(byte[] key, byte[] input)
         {
             if (input.Length < NonceSize + TagSize)
+            {
                 throw new InvalidOperationException("Encrypted payload is shorter than the AES-GCM header.");
+            }
 
             var nonce = new byte[NonceSize];
             var tag = new byte[TagSize];

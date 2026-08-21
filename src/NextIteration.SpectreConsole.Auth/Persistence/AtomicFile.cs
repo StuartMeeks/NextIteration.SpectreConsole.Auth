@@ -105,15 +105,16 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
             }
         }
 
-        private static string BuildTempPath(string finalPath) =>
-            // Unique per call to avoid collisions between concurrent writers,
-            // who would otherwise both want the same `{path}.tmp` name.
-            $"{finalPath}.{Guid.NewGuid():N}.tmp";
+        // Unique per call to avoid collisions between concurrent writers, who
+        // would otherwise both want the same `{path}.tmp` name.
+        private static string BuildTempPath(string finalPath) => $"{finalPath}.{Guid.NewGuid():N}.tmp";
 
         private static void ApplyUnixModeIfRequested(string path, UnixFileMode? unixMode)
         {
             if (unixMode is null || OperatingSystem.IsWindows())
+            {
                 return;
+            }
 
             File.SetUnixFileMode(path, unixMode.Value);
         }
@@ -123,7 +124,9 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
             try
             {
                 if (File.Exists(path))
+                {
                     File.Delete(path);
+                }
             }
             catch
             {

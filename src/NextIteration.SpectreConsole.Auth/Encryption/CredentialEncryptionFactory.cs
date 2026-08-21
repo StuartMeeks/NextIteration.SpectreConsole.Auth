@@ -19,10 +19,7 @@ namespace NextIteration.SpectreConsole.Auth.Encryption
         /// <see cref="LocalFileCredentialEncryption"/> — see its remarks for
         /// the security implications of supplying it.
         /// </param>
-        public static ICredentialEncryption Create(string credentialsDirectory, byte[]? additionalEntropy = null)
-        {
-            return new LocalFileCredentialEncryption(credentialsDirectory, additionalEntropy);
-        }
+        public static ICredentialEncryption Create(string credentialsDirectory, byte[]? additionalEntropy = null) => new LocalFileCredentialEncryption(credentialsDirectory, additionalEntropy);
 
         /// <summary>
         /// Creates the file-based, cross-platform encryption implementation explicitly.
@@ -33,10 +30,7 @@ namespace NextIteration.SpectreConsole.Auth.Encryption
         /// <see cref="LocalFileCredentialEncryption"/> — see its remarks for
         /// the security implications of supplying it.
         /// </param>
-        public static ICredentialEncryption CreateLocalFile(string credentialsDirectory, byte[]? additionalEntropy = null)
-        {
-            return new LocalFileCredentialEncryption(credentialsDirectory, additionalEntropy);
-        }
+        public static ICredentialEncryption CreateLocalFile(string credentialsDirectory, byte[]? additionalEntropy = null) => new LocalFileCredentialEncryption(credentialsDirectory, additionalEntropy);
 
         /// <summary>
         /// Creates a Windows DPAPI encryption implementation. Windows only —
@@ -46,9 +40,6 @@ namespace NextIteration.SpectreConsole.Auth.Encryption
         /// </summary>
         /// <exception cref="PlatformNotSupportedException">Not running on Windows.</exception>
         [SupportedOSPlatform("windows")]
-        public static ICredentialEncryption CreateDpapi()
-        {
-            return new DpapiCredentialEncryption();
-        }
+        public static ICredentialEncryption CreateDpapi() => new DpapiCredentialEncryption();
     }
 }

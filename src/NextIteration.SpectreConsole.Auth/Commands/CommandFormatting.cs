@@ -17,7 +17,11 @@ namespace NextIteration.SpectreConsole.Auth.Commands
         /// </summary>
         internal static string ShortId(string? accountId)
         {
-            if (string.IsNullOrEmpty(accountId)) return string.Empty;
+            if (string.IsNullOrEmpty(accountId))
+            {
+                return string.Empty;
+            }
+
             return accountId.Length >= 8 ? accountId[..8] + "..." : accountId;
         }
     }

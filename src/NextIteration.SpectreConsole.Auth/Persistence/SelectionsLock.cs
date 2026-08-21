@@ -29,7 +29,10 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
 
         private readonly FileStream _stream;
 
-        private SelectionsLock(FileStream stream) => _stream = stream;
+        private SelectionsLock(FileStream stream)
+        {
+            _stream = stream;
+        }
 
         internal static async Task<SelectionsLock> AcquireAsync(string lockPath, CancellationToken ct = default)
         {

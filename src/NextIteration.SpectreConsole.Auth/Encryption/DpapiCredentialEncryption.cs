@@ -28,7 +28,9 @@ namespace NextIteration.SpectreConsole.Auth.Encryption
         public Task<string> EncryptAsync(string plainText)
         {
             if (string.IsNullOrEmpty(plainText))
+            {
                 return Task.FromResult(string.Empty);
+            }
 
             try
             {
@@ -50,7 +52,9 @@ namespace NextIteration.SpectreConsole.Auth.Encryption
         public Task<string> DecryptAsync(string encryptedText)
         {
             if (string.IsNullOrEmpty(encryptedText))
+            {
                 return Task.FromResult(string.Empty);
+            }
 
             try
             {
