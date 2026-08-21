@@ -1,8 +1,9 @@
-using Spectre.Console;
 using System.ComponentModel;
 
 using NextIteration.SpectreConsole.Auth.Persistence;
 using NextIteration.SpectreConsole.Auth.Portability;
+
+using Spectre.Console;
 using Spectre.Console.Cli;
 
 namespace NextIteration.SpectreConsole.Auth.Commands

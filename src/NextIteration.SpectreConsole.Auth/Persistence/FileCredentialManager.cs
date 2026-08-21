@@ -146,7 +146,10 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
         /// <inheritdoc />
         public async Task<bool> DeleteCredentialAsync(string accountId)
         {
-            if (!IsValidAccountId(accountId)) return false;
+            if (!IsValidAccountId(accountId))
+            {
+                return false;
+            }
 
             var found = await FindCredentialByAccountIdAsync(accountId).ConfigureAwait(false);
             if (found is null)
@@ -174,7 +177,10 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
         /// <inheritdoc />
         public async Task<bool> SelectCredentialAsync(string accountId)
         {
-            if (!IsValidAccountId(accountId)) return false;
+            if (!IsValidAccountId(accountId))
+            {
+                return false;
+            }
 
             var found = await FindCredentialByAccountIdAsync(accountId).ConfigureAwait(false);
             if (found is null)

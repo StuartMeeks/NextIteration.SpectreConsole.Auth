@@ -13,19 +13,19 @@ namespace NextIteration.SpectreConsole.Auth.Credentials
         /// Must be unique across providers and stable across versions — it
         /// is embedded in the filename of each stored credential.
         /// </summary>
-        public abstract static string ProviderName { get; }
+        abstract static string ProviderName { get; }
 
         /// <summary>
         /// List of environment names the provider accepts (for example
         /// <c>Production</c>, <c>Staging</c>). Used to populate the
         /// environment-selection prompt during <c>accounts add</c>.
         /// </summary>
-        public abstract static List<string> SupportedEnvironments { get; }
+        abstract static List<string> SupportedEnvironments { get; }
 
         /// <summary>
         /// The environment this particular credential instance targets.
         /// Must be one of the values returned by <see cref="SupportedEnvironments"/>.
         /// </summary>
-        public abstract string Environment { get; }
+        abstract string Environment { get; }
     }
 }

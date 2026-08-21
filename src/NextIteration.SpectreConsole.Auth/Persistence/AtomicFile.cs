@@ -113,7 +113,9 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
         private static void ApplyUnixModeIfRequested(string path, UnixFileMode? unixMode)
         {
             if (unixMode is null || OperatingSystem.IsWindows())
+            {
                 return;
+            }
 
             File.SetUnixFileMode(path, unixMode.Value);
         }
@@ -123,7 +125,9 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
             try
             {
                 if (File.Exists(path))
+                {
                     File.Delete(path);
+                }
             }
             catch
             {

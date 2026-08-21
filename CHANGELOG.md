@@ -38,6 +38,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Enabled `EnforceCodeStyleInBuild`** (NextIteration.Standards §1.2.1, now a `MUST`). The
+  canonical `.editorconfig`'s gated rules now fail the build instead of merely showing in
+  the IDE, so the house style is enforced. Bringing the code green under the flag was a
+  mechanical, behavior-preserving reformat — braces on all single-statement `if`s, block-
+  scoped namespaces (the interop layer and tests were file-scoped), and minor
+  expression-body/accessibility/collection-expression fixes — applied with `dotnet format`.
+  `IDE0005` is suppressed in the **test** project only: it requires `GenerateDocumentationFile`,
+  which §2.7 sets to `false` for tests, so gating it there would hard-error; it still gates
+  the shipping project. (§2.7 needs the matching amendment estate-wide.)
+
 - **Adopted the revised canonical `.editorconfig`** (NextIteration.Standards §5.2). The new
   file is a deliberate allow-list of gated style rules (no blanket
   `dotnet_analyzer_diagnostic.severity`) and fixes the private-field naming rule that had

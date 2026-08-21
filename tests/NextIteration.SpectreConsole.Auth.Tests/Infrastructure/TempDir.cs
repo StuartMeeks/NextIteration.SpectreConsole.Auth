@@ -1,34 +1,35 @@
-namespace NextIteration.SpectreConsole.Auth.Tests.Infrastructure;
-
-/// <summary>
-/// Throwaway directory under the system temp path. Tests that need a
-/// credentials directory (or any disk scratch space) should wrap this in
-/// <c>using</c> so the directory is recursively removed when the test ends
-/// regardless of pass/fail.
-/// </summary>
-internal sealed class TempDir : IDisposable
+namespace NextIteration.SpectreConsole.Auth.Tests.Infrastructure
 {
-    public string Path { get; } =
-        System.IO.Path.Join(System.IO.Path.GetTempPath(), "ni.sca.tests." + Guid.NewGuid().ToString("N"));
-
-    public TempDir()
+    /// <summary>
+    /// Throwaway directory under the system temp path. Tests that need a
+    /// credentials directory (or any disk scratch space) should wrap this in
+    /// <c>using</c> so the directory is recursively removed when the test ends
+    /// regardless of pass/fail.
+    /// </summary>
+    internal sealed class TempDir : IDisposable
     {
-        Directory.CreateDirectory(Path);
-    }
+        public string Path { get; } =
+            System.IO.Path.Join(System.IO.Path.GetTempPath(), "ni.sca.tests." + Guid.NewGuid().ToString("N"));
 
-    public void Dispose()
-    {
-        try
+        public TempDir()
         {
-            if (Directory.Exists(Path))
-            {
-                Directory.Delete(Path, recursive: true);
-            }
+            Directory.CreateDirectory(Path);
         }
-        catch
+
+        public void Dispose()
         {
-            // Best-effort cleanup. Stray scratch dirs in %TEMP% aren't a
-            // problem — the OS cleans temp on reboot eventually.
+            try
+            {
+                if (Directory.Exists(Path))
+                {
+                    Directory.Delete(Path, recursive: true);
+                }
+            }
+            catch
+            {
+                // Best-effort cleanup. Stray scratch dirs in %TEMP% aren't a
+                // problem — the OS cleans temp on reboot eventually.
+            }
         }
     }
 }
