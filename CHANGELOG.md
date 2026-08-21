@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] — 2026-08-21
+
+First stable release. Headline: whole-store **export/import** to move credentials
+between machines. **Breaking:** `ICredentialManager` gains `ExportCredentialsAsync` and
+`RestoreCredentialAsync` plus the `CredentialExport` record — any external implementation
+must add both members.
+
 ### Added
 
 - **`accounts export` and `accounts import` — move your whole credential set between
@@ -388,6 +395,9 @@ Consumers needed a way to read a specific stored credential's secret at runtime 
 - SourceLink, deterministic builds, embedded symbols, published symbol packages.
 - `TreatWarningsAsErrors=true`, `AnalysisLevel=latest` — zero-warning public API.
 
+[Unreleased]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/releases/tag/v1.0.0
+[0.7.1]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/releases/tag/v0.7.1
 [0.7.0]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/releases/tag/v0.7.0
 [0.6.3]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/releases/tag/v0.6.3
 [0.6.2]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/releases/tag/v0.6.2
