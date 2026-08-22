@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1] — 2026-08-22
+
+Maintenance release. No API or behavior change for consumers: a behavior-identical
+hardening of an internal null-check in the file backend, plus a CI-only move to buildless
+CodeQL analysis. Safe drop-in over 1.0.0.
+
 ### Changed
 
 - **CodeQL now analyses the C# source buildless** (NextIteration.Standards §4.4). The
@@ -414,7 +420,8 @@ Consumers needed a way to read a specific stored credential's secret at runtime 
 - SourceLink, deterministic builds, embedded symbols, published symbol packages.
 - `TreatWarningsAsErrors=true`, `AnalysisLevel=latest` — zero-warning public API.
 
-[Unreleased]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/releases/tag/v1.0.1
 [1.0.0]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/releases/tag/v1.0.0
 [0.7.1]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/releases/tag/v0.7.1
 [0.7.0]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/releases/tag/v0.7.0
