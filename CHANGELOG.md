@@ -21,6 +21,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   every target framework at once, where autobuild could pick a single TFM and analyse half
   the code. Adopts the revised canonical `codeql.yml` verbatim; no query coverage changes.
 
+- **Rewrote the provider-match guard in `FileCredentialManager.ListCredentialsAsync`**
+  from `credential?.ProviderName.Equals(…) == true` to an explicit
+  `credential is not null && …`. Behavior is identical, but the null state now flows into
+  the block body — which dereferences `credential` throughout — so both the compiler and
+  CodeQL can prove the accesses safe. Resolves the `cs/dereferenced-value-may-be-null`
+  alert the corrected buildless analysis surfaced (a genuine code fix, not a dismissal).
+
 ## [1.0.0] — 2026-08-21
 
 First stable release. Headline: whole-store **export/import** to move credentials
