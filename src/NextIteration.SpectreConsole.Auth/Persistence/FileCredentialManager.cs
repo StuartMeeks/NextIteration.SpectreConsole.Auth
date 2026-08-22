@@ -74,7 +74,11 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
                     // Defensive re-check: the glob should only match this
                     // provider's files, but if a stray file sneaks in we want
                     // to ignore it rather than report a mis-attributed row.
-                    if (credential?.ProviderName.Equals(providerName, StringComparison.OrdinalIgnoreCase) == true)
+                    // `is not null` (rather than `?.… == true`) so the null
+                    // state flows into the block — the whole body dereferences
+                    // `credential`, and this lets the analyzer prove it safe.
+                    if (credential is not null &&
+                        credential.ProviderName.Equals(providerName, StringComparison.OrdinalIgnoreCase))
                     {
                         var isSelected = selections.TryGetValue($"{credential.ProviderName}", out var selectedId) &&
                                        selectedId.Equals(credential.AccountId, StringComparison.OrdinalIgnoreCase);
