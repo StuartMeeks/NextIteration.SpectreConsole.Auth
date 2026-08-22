@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **CodeQL now analyses the C# source buildless** (NextIteration.Standards §4.4). The
+  `codeql.yml` init step moves to `build-mode: none` and the explicit `Setup .NET`,
+  `Restore`, and `Build` steps are dropped. This is load-bearing, not a simplification:
+  GitHub applies the `paths-ignore` filter *only* under buildless extraction — under a
+  compiled build every file the compiler sees is analysed, `obj/` included, so the
+  `**/obj/**` exclusion this repo already declared was silently inert and the xUnit
+  auto-generated entry point in `obj/` was being analysed. Buildless extraction also reads
+  every target framework at once, where autobuild could pick a single TFM and analyse half
+  the code. Adopts the revised canonical `codeql.yml` verbatim; no query coverage changes.
+
 ## [1.0.0] — 2026-08-21
 
 First stable release. Headline: whole-store **export/import** to move credentials
