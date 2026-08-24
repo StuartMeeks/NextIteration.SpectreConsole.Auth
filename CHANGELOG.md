@@ -19,6 +19,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   issue tracker and names only the two genuinely open items: ACL-scoped Keychain access (#18)
   and libsecret KWallet validation (#19).
 
+- **`CredentialEncryptionFactory.Create` carried the same retired-TODO reference in its XML
+  doc**, which ships in the generated docs and `.snupkg`. It was stale three ways: the TODO
+  is gone, both OS-native backends have since shipped, and the premise was wrong — the
+  Keychain and libsecret backends replace `ICredentialManager` and never pass through
+  `ICredentialEncryption`, so this factory could never have returned them. The doc now says
+  what actually selects those backends. XML docs only; no API surface change.
+
+- **Dropped ACL-scoped Keychain access from the README's outstanding-hardening list.** Issue
+  #18 was closed as won't-do: binding credential items to the creating binary was
+  investigated and rejected, so listing it as planned work was misleading.
+
 ## [1.0.1] — 2026-08-22
 
 Maintenance release. No API or behavior change for consumers: a behavior-identical
