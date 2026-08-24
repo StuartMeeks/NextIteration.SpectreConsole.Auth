@@ -9,9 +9,12 @@ namespace NextIteration.SpectreConsole.Auth.Encryption
     {
         /// <summary>
         /// Creates the default encryption implementation for the current platform.
-        /// Today this is always <see cref="LocalFileCredentialEncryption"/>. In
-        /// the future this may switch to an OS-native keychain on macOS/Linux
-        /// automatically — see the solution TODO for the planned backends.
+        /// Today this is always <see cref="LocalFileCredentialEncryption"/>. The
+        /// OS-native stores (macOS Keychain, Linux libsecret) are chosen at the
+        /// credential-manager level via <see cref="CredentialStoreOptions.UseKeychain"/>
+        /// / <see cref="CredentialStoreOptions.UseKeyring"/> and bypass this factory
+        /// entirely — they replace <see cref="Persistence.ICredentialManager"/> rather
+        /// than plugging in as an <see cref="ICredentialEncryption"/>.
         /// </summary>
         /// <param name="credentialsDirectory">Credentials directory where the keystore will live.</param>
         /// <param name="additionalEntropy">

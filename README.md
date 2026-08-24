@@ -373,7 +373,7 @@ Everything else is transitive.
 
 ## Contributing
 
-Issues and PRs welcome. Outstanding hardening is tracked in [GitHub issues](https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/issues) — currently ACL-scoped Keychain access ([#18](https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/issues/18)) and KWallet validation for the libsecret backend ([#19](https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/issues/19)).
+Issues and PRs welcome. Outstanding hardening is tracked in [GitHub issues](https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/issues) — currently KWallet validation for the libsecret backend ([#19](https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/issues/19)).
 
 When contributing code, please keep the zero-warning, fully-documented public surface. `TreatWarningsAsErrors` is on for a reason.
 
