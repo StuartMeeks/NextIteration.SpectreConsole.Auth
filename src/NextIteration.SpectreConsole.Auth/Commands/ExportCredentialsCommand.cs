@@ -42,8 +42,13 @@ namespace NextIteration.SpectreConsole.Auth.Commands
 
                 if (result.Count == 0)
                 {
-                    AnsiConsole.MarkupLine("[yellow]No credentials to export.[/]");
-                    return 0;
+                    // All-unreadable is a very different situation from an empty
+                    // store, and reporting it as "nothing to export" would hide a
+                    // broken store behind a success message.
+                    AnsiConsole.MarkupLine(result.Skipped > 0
+                        ? $"[red]Nothing exported: all {result.Skipped} stored credential(s) failed to decrypt with this machine's keystore.[/]"
+                        : "[yellow]No credentials to export.[/]");
+                    return result.Skipped > 0 ? 1 : 0;
                 }
 
                 // 0600 on Unix so the archive isn't world-readable while it sits
@@ -54,6 +59,15 @@ namespace NextIteration.SpectreConsole.Auth.Commands
                     OperatingSystem.IsWindows() ? null : UnixFileMode.UserRead | UnixFileMode.UserWrite).ConfigureAwait(false);
 
                 AnsiConsole.MarkupLine($"[green]Exported {result.Count} credential(s) to {Markup.Escape(settings.File)}.[/]");
+
+                if (result.Skipped > 0)
+                {
+                    // Loud, because the archive is incomplete and the omission is
+                    // otherwise invisible until a restore comes up short.
+                    AnsiConsole.MarkupLine(
+                        $"[yellow]Warning: {result.Skipped} credential(s) were left out because they could not be decrypted with this machine's keystore. The archive is incomplete — run 'accounts list' to see which.[/]");
+                }
+
                 AnsiConsole.MarkupLine("[grey]The archive holds every secret, protected only by the passphrase. Keep it and the passphrase safe.[/]");
                 return 0;
             }

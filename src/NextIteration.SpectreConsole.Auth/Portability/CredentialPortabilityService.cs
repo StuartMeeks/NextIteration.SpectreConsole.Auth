@@ -18,7 +18,12 @@ namespace NextIteration.SpectreConsole.Auth.Portability
     /// <summary>Outcome of an <see cref="CredentialPortabilityService.ExportAsync"/> call.</summary>
     /// <param name="Bundle">The passphrase-encrypted archive text.</param>
     /// <param name="Count">Number of credentials written into the archive.</param>
-    internal sealed record ExportResult(string Bundle, int Count);
+    /// <param name="Skipped">
+    /// Stored credentials left out because their payload could not be decrypted.
+    /// Surfaced so the command can warn: a silently short archive is a data-loss
+    /// trap, since the missing secrets look like they were never stored.
+    /// </param>
+    internal sealed record ExportResult(string Bundle, int Count, int Skipped);
 
     /// <summary>Outcome of an <see cref="CredentialPortabilityService.ImportAsync"/> call.</summary>
     /// <param name="Added">Credentials that did not exist and were created.</param>
@@ -51,7 +56,13 @@ namespace NextIteration.SpectreConsole.Auth.Portability
         {
             var credentials = await _manager.ExportCredentialsAsync().ConfigureAwait(false);
             var bundle = CredentialArchive.Serialize(credentials, passphrase);
-            return new ExportResult(bundle, credentials.Count);
+
+            // The backend drops credentials it cannot decrypt, so the archive may
+            // hold fewer than the store does. Derive the difference from the
+            // metadata listing rather than widening the public
+            // ICredentialManager.ExportCredentialsAsync signature to report it.
+            var stored = await CountStoredCredentialsAsync().ConfigureAwait(false);
+            return new ExportResult(bundle, credentials.Count, Math.Max(0, stored - credentials.Count));
         }
 
         /// <summary>
@@ -64,26 +75,18 @@ namespace NextIteration.SpectreConsole.Auth.Portability
         /// <param name="passphrase">The passphrase the archive was written with.</param>
         /// <param name="resolveConflict">
         /// Called once per collision with (incoming, existing) and returns how to
-        /// resolve it. Invoked only when there is an actual conflict.
+        /// resolve it. Invoked only when there is an actual conflict. The existing
+        /// side is metadata only — see <see cref="BuildConflictIndexAsync"/>.
         /// </param>
         internal async Task<ImportResult> ImportAsync(
             string bundle,
             string passphrase,
-            Func<CredentialExport, CredentialExport, ConflictResolution> resolveConflict)
+            Func<CredentialExport, CredentialSummary, ConflictResolution> resolveConflict)
         {
             ArgumentNullException.ThrowIfNull(resolveConflict);
 
             var incoming = CredentialArchive.Deserialize(bundle, passphrase);
-            var existing = await _manager.ExportCredentialsAsync().ConfigureAwait(false);
-
-            // Index existing credentials by their semantic identity. Duplicates
-            // on the same key are unusual but possible; keep the first as the
-            // conflict target.
-            var existingByKey = new Dictionary<string, CredentialExport>(StringComparer.Ordinal);
-            foreach (var e in existing)
-            {
-                _ = existingByKey.TryAdd(ConflictKey(e), e);
-            }
+            var existingByKey = await BuildConflictIndexAsync().ConfigureAwait(false);
 
             var added = 0;
             var overwritten = 0;
@@ -116,16 +119,66 @@ namespace NextIteration.SpectreConsole.Auth.Portability
             return new ImportResult(added, overwritten, skipped);
         }
 
+        /// <summary>
+        /// Indexes the credentials already in the store by their semantic identity,
+        /// reading <b>metadata only</b>.
+        /// </summary>
+        /// <remarks>
+        /// Deliberately not <see cref="ICredentialManager.ExportCredentialsAsync"/>.
+        /// Conflict detection needs only the provider, account name and environment
+        /// — all stored in plaintext — never the encrypted payload. Decrypting the
+        /// whole store to build this index was both wasteful (every secret
+        /// materialised in memory for an operation that never reads one) and fatal:
+        /// a single credential the local keystore cannot open aborted the entire
+        /// import, which is exactly the store an import is meant to repair.
+        /// </remarks>
+        private async Task<Dictionary<string, CredentialSummary>> BuildConflictIndexAsync()
+        {
+            var index = new Dictionary<string, CredentialSummary>(StringComparer.Ordinal);
+
+            foreach (var provider in await _manager.GetProviderNamesAsync().ConfigureAwait(false))
+            {
+                foreach (var summary in await _manager.ListCredentialsAsync(provider).ConfigureAwait(false))
+                {
+                    // Duplicates on the same key are unusual but possible; keep the
+                    // first as the conflict target.
+                    _ = index.TryAdd(
+                        ConflictKey(summary.ProviderName, summary.AccountName, summary.Environment),
+                        summary);
+                }
+            }
+
+            return index;
+        }
+
+        /// <summary>
+        /// Counts what the store holds, from metadata only, so an export can report
+        /// how many credentials it had to leave out.
+        /// </summary>
+        private async Task<int> CountStoredCredentialsAsync()
+        {
+            var count = 0;
+            foreach (var provider in await _manager.GetProviderNamesAsync().ConfigureAwait(false))
+            {
+                count += (await _manager.ListCredentialsAsync(provider).ConfigureAwait(false)).Count();
+            }
+
+            return count;
+        }
+
+        private static string ConflictKey(CredentialExport c) =>
+            ConflictKey(c.ProviderName, c.AccountName, c.Environment);
+
         // Semantic identity used to detect "the same" credential across machines,
         // where account ids differ. Case-insensitive on all three parts, and
         // length-prefixed so no combination of separators inside a value can make
         // two different triples collide onto one key.
-        private static string ConflictKey(CredentialExport c)
+        private static string ConflictKey(string providerName, string accountName, string environment)
         {
-            var provider = c.ProviderName.ToLowerInvariant();
-            var name = c.AccountName.ToLowerInvariant();
-            var environment = c.Environment.ToLowerInvariant();
-            return $"{provider.Length}:{provider}|{name.Length}:{name}|{environment.Length}:{environment}";
+            var provider = providerName.ToLowerInvariant();
+            var name = accountName.ToLowerInvariant();
+            var env = environment.ToLowerInvariant();
+            return $"{provider.Length}:{provider}|{name.Length}:{name}|{env.Length}:{env}";
         }
     }
 }
