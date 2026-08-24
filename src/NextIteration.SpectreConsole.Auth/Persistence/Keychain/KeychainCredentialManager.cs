@@ -275,22 +275,29 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Keychain
             {
                 var providerName = ProviderNameFromService(item.Service)!;
 
+                if (item.Data is null)
+                {
+                    // Requested but absent. Reachable only when the item was removed
+                    // between enumeration and read: QuerySingleItem returns null solely
+                    // for errSecItemNotFound, and every other status goes through
+                    // ThrowIfError. A locked keychain or a denied read
+                    // (errSecInteractionNotAllowed, errSecAuthFailed) therefore still
+                    // aborts the whole export rather than skipping one item.
+                    //
+                    // Skip it. CredentialData flows straight into the archive, so an
+                    // empty payload would write a valid-looking credential holding
+                    // nothing, and the next import would restore that over a real
+                    // secret. The caller reports the skipped count.
+                    //
+                    // Checked before the selection lookup so a skipped item costs no
+                    // keychain round-trip.
+                    continue;
+                }
+
                 if (!selectionCache.TryGetValue(providerName, out var selectedId))
                 {
                     selectedId = ReadSelection(providerName);
                     selectionCache[providerName] = selectedId;
-                }
-
-                if (item.Data is null)
-                {
-                    // Requested but absent — the item was removed between enumeration
-                    // and read, or Security.framework failed on this one item.
-                    //
-                    // Skip it. CredentialData flows straight into the archive, so an
-                    // empty payload here would write a valid-looking credential
-                    // holding nothing, and the next import would restore that over a
-                    // real secret. The caller reports the skipped count.
-                    continue;
                 }
 
                 exports.Add(new CredentialExport

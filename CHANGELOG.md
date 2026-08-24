@@ -25,10 +25,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   D-Bus/Security.framework failure). Such an item is now skipped, matching the file backend, and
   `accounts export` already warns with the skipped count.
 
+  On libsecret the skip needed a fix one layer down to work at all.
+  `LibsecretInterop.ReadSecretValueAsString` returned `string.Empty` for a NULL `SecretValue`,
+  collapsing "the secret did not load" into "the secret is an empty string" before the manager
+  ever saw it — so a guard on `item.Secret is null` could never fire. It now returns `string?`
+  and yields `null` in that case, which is the state
+  `secret_retrievable_retrieve_secret_sync` reports (without setting a GError) when an item
+  vanishes between the search and the retrieve. An empty-but-present secret, a valid data pointer
+  of length zero, is still a legitimate stored value and still reads as `string.Empty`.
+
   `ListCredentialsAsync` on both backends now also reports `IsDecryptable = false` when a
   summary provider is registered but the secret did not load, so the flag added in 1.1.0 means
-  the same thing on all three backends rather than only on the file one. The targeted fetch paths
-  were already correct and are unchanged.
+  the same thing on all three backends rather than only on the file one. On libsecret this
+  depended on the same interop fix; it additionally stops `GetDisplayFields` being handed an
+  empty string, which a JSON-parsing summary provider would have thrown on, taking down the whole
+  listing.
+
+  Scope of the skip, stated precisely: it covers an item that disappears between enumeration and
+  read. A locked collection or a per-item transport error still aborts the whole export —
+  libsecret sets a GError and Keychain returns a non-`errSecItemNotFound` status, and both are
+  raised rather than skipped. The targeted fetch paths were already correct and are unchanged.
+
+  `ICredentialManager.ExportCredentialsAsync` is documented accordingly: implementations **must**
+  omit a credential they cannot read rather than return it with an empty payload, and the returned
+  count can therefore be lower than the number stored.
 
 ## [1.1.0] — 2026-08-24
 

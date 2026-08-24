@@ -89,6 +89,11 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
             Assert.Equal("Production", adobe.Environment);
             Assert.Equal("{\"apiKey\":\"secret\"}", adobe.CredentialData);
             Assert.True(adobe.IsSelected);
+
+            // Guards the skip added for #42 on the backend where it is reachable: a
+            // readable credential must still be exported, and carry its real payload
+            // rather than the empty string the old ternary substituted.
+            Assert.NotEqual(string.Empty, adobe.CredentialData);
         }
 
         [Fact]
@@ -456,6 +461,11 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
             var field = Assert.Single(credential.DisplayFields);
             Assert.Equal("Fingerprint", field.Key);
             Assert.Equal("xyz", field.Value);
+
+            // The data loaded, so the row is not flagged. The false branch needs a
+            // load failure, which cannot be forced through the static P/Invoke
+            // surface — see #42.
+            Assert.True(credential.IsDecryptable);
         }
 
         private sealed class FakeAdobeSummaryProvider : ICredentialSummaryProvider

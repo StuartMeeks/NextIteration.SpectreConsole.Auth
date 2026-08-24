@@ -519,7 +519,13 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
             var manager = NewManager();
             var id = await manager.AddCredentialAsync("Adobe", "prod", "Production", "{\"apiKey\":\"xyz\"}");
 
-            var exported = Assert.Single(await manager.ExportCredentialsAsync());
+            // Retried like every sibling export test: AddCredentialAsync confirms
+            // visibility via secret_password_lookupv on the full attribute key, which
+            // is a different query path from the export's secret_password_searchv on
+            // (app, kind) — so being visible to the lookup does not imply being
+            // visible to the search yet.
+            var exported = Assert.Single(
+                await RetryHelper.UntilAsync(() => manager.ExportCredentialsAsync(), r => r.Count == 1));
 
             // Guards the skip added for #42: a readable credential must still be
             // exported, and with its real payload rather than an empty string.

@@ -323,23 +323,29 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Libsecret
                     continue;
                 }
 
+                if (item.Secret is null)
+                {
+                    // The secret was requested but did not materialise. Reachable when
+                    // the item vanished between the search and the retrieve, which
+                    // libsecret reports as a NULL SecretValue *without* a GError. A
+                    // locked collection or a per-item D-Bus error sets a GError instead
+                    // and aborts the whole export via ThrowIfGError — per-item recovery
+                    // from those is not attempted here.
+                    //
+                    // Skip it. CredentialData flows straight into the archive, so
+                    // exporting an empty payload would write a valid-looking credential
+                    // holding nothing, and the next import would restore that over a
+                    // real secret. The caller reports the skipped count.
+                    //
+                    // Checked before the selection lookup so a skipped item costs no
+                    // keyring round-trip.
+                    continue;
+                }
+
                 if (!selectionCache.TryGetValue(providerName, out var selectedId))
                 {
                     selectedId = ReadSelection(providerName);
                     selectionCache[providerName] = selectedId;
-                }
-
-                if (item.Secret is null)
-                {
-                    // The secret was requested but did not materialise — a locked
-                    // collection that could not be unlocked, an item removed between
-                    // enumeration and read, or a per-item D-Bus failure.
-                    //
-                    // Skip it. CredentialData flows straight into the archive, so
-                    // exporting an empty payload here would write a valid-looking
-                    // credential holding nothing, and the next import would restore
-                    // that over a real secret. The caller reports the skipped count.
-                    continue;
                 }
 
                 var accountId = item.Attributes.GetValueOrDefault(AttrAccount, string.Empty);

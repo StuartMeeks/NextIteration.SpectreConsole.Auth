@@ -284,20 +284,37 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Libsecret
         private delegate bool GHashTableIterNext(IntPtr iter, out IntPtr key, out IntPtr value);
 
         /// <summary>
-        /// Reads a SecretValue into a managed byte array. Assumes UTF-8 text
-        /// (our credential payloads are JSON).
+        /// Reads a SecretValue into a managed string. Assumes UTF-8 text (our
+        /// credential payloads are JSON).
         /// </summary>
-        internal static string ReadSecretValueAsString(IntPtr secretValue)
+        /// <returns>
+        /// The secret, or <see langword="null"/> when there is no secret to read —
+        /// a NULL <c>SecretValue</c> or a NULL data pointer.
+        /// </returns>
+        /// <remarks>
+        /// The null return is load-bearing and must not be collapsed back to
+        /// <see cref="string.Empty"/>. Callers have to distinguish "the secret did
+        /// not load" from "the stored secret is an empty string": the former must be
+        /// skipped by <see cref="LibsecretCredentialManager.ExportCredentialsAsync"/>,
+        /// because an empty payload written into a portable archive restores over a
+        /// real secret on the next import. An empty-but-present secret (a valid data
+        /// pointer of length zero) is a legitimate stored value and still returns
+        /// <see cref="string.Empty"/>.
+        /// </remarks>
+        internal static string? ReadSecretValueAsString(IntPtr secretValue)
         {
             if (secretValue == IntPtr.Zero)
             {
-                return string.Empty;
+                // secret_retrievable_retrieve_secret_sync returns NULL without setting
+                // a GError when the item vanished between the search and the retrieve,
+                // so this is reached without ThrowIfGError firing.
+                return null;
             }
 
             var ptr = secret_value_get(secretValue, out var length);
             if (ptr == IntPtr.Zero)
             {
-                return string.Empty;
+                return null;
             }
 
             var bytes = new byte[(int)length];
