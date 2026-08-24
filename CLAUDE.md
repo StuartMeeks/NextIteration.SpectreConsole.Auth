@@ -9,8 +9,16 @@ providers, then get `accounts add/list/select/delete` wired into their existing
 OS-native stores — macOS Keychain, Linux libsecret, Windows DPAPI.
 
 The provider packages in `NextIteration.SpectreConsole.Auth.Providers` consume this one
-through a capped range (`[0.7.1,1.0.0)`), so a breaking change to `ICredentialCollector`
-or `ICredentialSummaryProvider` is a downstream event, not a local one.
+through a major-capped range — the 1.0.1 providers all depend on `[1.0.1, 2.0.0)` — so a
+breaking change to `ICredentialCollector` or `ICredentialSummaryProvider` is a downstream
+event, not a local one.
+
+Note what that cap does and does not do. It sits at the **major** boundary, so it will not
+protect those packages from a break shipped in a 1.x release: any 1.x satisfies the range
+and gets resolved. The only thing keeping the providers working is not breaking those two
+interfaces within 1.x. (This note previously recorded the providers' pre-1.0 cap of
+`[0.7.1,1.0.0)`, which excluded every 1.x release of this package; the providers widened it
+when they went 1.0.x, and this note was not updated with them.)
 
 ## Things that are easy to get wrong here
 
