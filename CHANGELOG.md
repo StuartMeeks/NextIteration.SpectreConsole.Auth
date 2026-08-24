@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] — 2026-08-24
+
+One behaviour fix, one additive public member, three documentation fixes. Credentials the local
+keystore cannot open no longer break `accounts list`, `accounts export` or `accounts import` —
+previously a single unreadable credential file took down all three, including the import that was
+meant to repair it. Minor rather than patch because `CredentialSummary` gains a member; the
+addition is source- and binary-compatible, no dependency floor moved, and nothing on disk changed
+format. Drop-in over 1.0.1.
+
+### Added
+
+- **`CredentialSummary.IsDecryptable`** — distinguishes "the stored payload could not be
+  decrypted" from "no `ICredentialSummaryProvider` is registered for this provider", both of which
+  otherwise present as an empty `DisplayFields`. `accounts list` uses it to mark a broken row
+  `(unreadable)` instead of rendering it as ordinary. Additive: not `required` and defaults to
+  `true`, so existing external `ICredentialManager` implementations keep compiling untouched. It is
+  documented as a display hint rather than a guarantee — nothing is decrypted when no summary
+  provider is registered, so it stays `true` for an unreadable credential in that case; callers
+  needing certainty should use `GetCredentialByIdAsync`, which throws.
+
 ### Fixed
 
 - **`accounts import` aborted when any existing local credential could not be decrypted**
@@ -484,7 +504,8 @@ Consumers needed a way to read a specific stored credential's secret at runtime 
 - SourceLink, deterministic builds, embedded symbols, published symbol packages.
 - `TreatWarningsAsErrors=true`, `AnalysisLevel=latest` — zero-warning public API.
 
-[Unreleased]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/releases/tag/v1.1.0
 [1.0.1]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/releases/tag/v1.0.1
 [1.0.0]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/releases/tag/v1.0.0
 [0.7.1]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/releases/tag/v0.7.1
