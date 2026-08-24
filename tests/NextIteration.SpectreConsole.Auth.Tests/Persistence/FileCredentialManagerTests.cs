@@ -590,6 +590,122 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
             _ = await Assert.ThrowsAsync<ArgumentException>(() => manager.RestoreCredentialAsync(bad));
         }
 
+        // ---- Undecryptable credentials (#38) --------------------------------
+        //
+        // A credentials directory copied between machines/users, or a keystore
+        // replaced while its credential files survived, leaves files that parse
+        // as JSON with intact plaintext metadata but an unopenable payload. The
+        // enumeration paths must tolerate that; the targeted fetch paths must not.
+
+        [Fact]
+        public async Task ListCredentialsAsync_UndecryptableCredential_StillListsEveryRow()
+        {
+            using var temp = new TempDir();
+            var manager = CreateManager(temp.Path, [new FakeAdobeSummaryProvider()]);
+
+            var goodId = await manager.AddCredentialAsync("Adobe", "good", "Production", "{\"apiKey\":\"KEEP\"}");
+            var badId = await manager.AddCredentialAsync("Adobe", "bad", "Production", "{\"apiKey\":\"LOST\"}");
+            CredentialCorruption.CorruptPayload(temp.Path, "Adobe", badId);
+
+            var listed = (await manager.ListCredentialsAsync("Adobe")).ToList();
+
+            Assert.Equal(2, listed.Count);
+
+            var good = listed.Single(c => c.AccountId == goodId);
+            Assert.True(good.IsDecryptable);
+            Assert.NotEmpty(good.DisplayFields);
+
+            // The broken row survives: its id has to stay visible, because that is
+            // what `accounts delete <id>` needs to clear it.
+            var bad = listed.Single(c => c.AccountId == badId);
+            Assert.False(bad.IsDecryptable);
+            Assert.Empty(bad.DisplayFields);
+            Assert.Equal("bad", bad.AccountName);
+        }
+
+        [Fact]
+        public async Task ListCredentialsAsync_NoSummaryProvider_DoesNotReadPayload()
+        {
+            using var temp = new TempDir();
+            var manager = CreateManager(temp.Path); // no summary provider registered
+
+            var badId = await manager.AddCredentialAsync("Adobe", "bad", "Production", "{}");
+            CredentialCorruption.CorruptPayload(temp.Path, "Adobe", badId);
+
+            var listed = (await manager.ListCredentialsAsync("Adobe")).ToList();
+
+            // Nothing is decrypted without a summary provider, so the flag stays
+            // true even though the payload is in fact unreadable. Pins the
+            // documented meaning of IsDecryptable as a display hint, not a promise.
+            Assert.True(Assert.Single(listed).IsDecryptable);
+        }
+
+        [Fact]
+        public async Task ExportCredentialsAsync_UndecryptableCredential_SkipsItAndKeepsTheRest()
+        {
+            using var temp = new TempDir();
+            var manager = CreateManager(temp.Path);
+
+            var goodId = await manager.AddCredentialAsync("Adobe", "good", "Production", "{\"k\":\"KEEP\"}");
+            var badId = await manager.AddCredentialAsync("Adobe", "bad", "Production", "{\"k\":\"LOST\"}");
+            CredentialCorruption.CorruptPayload(temp.Path, "Adobe", badId);
+
+            var exported = await manager.ExportCredentialsAsync();
+
+            // Dropped, never emitted with an empty payload: CredentialData flows
+            // straight into the archive, so a blank secret would be silent
+            // corruption at the next import.
+            var only = Assert.Single(exported);
+            Assert.Equal(goodId, only.AccountId);
+            Assert.Equal("{\"k\":\"KEEP\"}", only.CredentialData);
+        }
+
+        [Fact]
+        public async Task DeleteCredentialAsync_UndecryptableCredential_RemovesIt()
+        {
+            using var temp = new TempDir();
+            var manager = CreateManager(temp.Path);
+
+            var badId = await manager.AddCredentialAsync("Adobe", "bad", "Production", "{}");
+            CredentialCorruption.CorruptPayload(temp.Path, "Adobe", badId);
+
+            // The repair path: delete works on metadata alone and never decrypts.
+            Assert.True(await manager.DeleteCredentialAsync(badId));
+            Assert.False(File.Exists(Path.Join(temp.Path, $"adobe_{badId}.json")));
+        }
+
+        [Fact]
+        public async Task GetSelectedCredentialAsync_UndecryptableCredential_StillThrows()
+        {
+            using var temp = new TempDir();
+            var manager = CreateManager(temp.Path);
+
+            var badId = await manager.AddCredentialAsync("Adobe", "bad", "Production", "{}");
+            Assert.True(await manager.SelectCredentialAsync(badId));
+            CredentialCorruption.CorruptPayload(temp.Path, "Adobe", badId);
+
+            // Deliberately NOT tolerant. This is a targeted fetch: the caller asked
+            // for one specific credential and it cannot be supplied. Returning null
+            // would masquerade as "no credential selected" and hand the consumer a
+            // worse diagnosis than the real one. Guards the enumeration/fetch split
+            // against a future over-broad catch.
+            _ = await Assert.ThrowsAsync<InvalidOperationException>(
+                () => manager.GetSelectedCredentialAsync("Adobe"));
+        }
+
+        [Fact]
+        public async Task GetCredentialByIdAsync_UndecryptableCredential_StillThrows()
+        {
+            using var temp = new TempDir();
+            var manager = CreateManager(temp.Path);
+
+            var badId = await manager.AddCredentialAsync("Adobe", "bad", "Production", "{}");
+            CredentialCorruption.CorruptPayload(temp.Path, "Adobe", badId);
+
+            _ = await Assert.ThrowsAsync<InvalidOperationException>(
+                () => manager.GetCredentialByIdAsync("Adobe", badId));
+        }
+
         /// <summary>
         /// Minimal summary provider used only to verify that
         /// <see cref="FileCredentialManager.ListCredentialsAsync"/> routes

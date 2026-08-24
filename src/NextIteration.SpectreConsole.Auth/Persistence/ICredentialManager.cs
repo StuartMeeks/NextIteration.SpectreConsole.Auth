@@ -139,9 +139,27 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
         /// <summary>
         /// Provider-specific label/value pairs projected from the decrypted
         /// credential by the registered <see cref="ICredentialSummaryProvider"/>.
-        /// Empty when no summary provider is registered for this provider.
+        /// Empty when no summary provider is registered for this provider, and
+        /// also when the payload could not be decrypted — see
+        /// <see cref="IsDecryptable"/> to tell those apart.
         /// </summary>
         public IReadOnlyList<KeyValuePair<string, string>> DisplayFields { get; init; } = [];
+
+        /// <summary>
+        /// Display hint: <see langword="false"/> when the stored payload was read
+        /// and failed to decrypt, so <see cref="DisplayFields"/> is empty for that
+        /// reason rather than because no summary provider is registered.
+        /// </summary>
+        /// <remarks>
+        /// This is not a guarantee that the payload <em>is</em> readable. The
+        /// payload is only read when an <see cref="ICredentialSummaryProvider"/> is
+        /// registered for the provider; with none registered nothing is decrypted
+        /// and this stays <see langword="true"/> even for an unreadable credential.
+        /// Callers that must know for certain should attempt
+        /// <see cref="ICredentialManager.GetCredentialByIdAsync"/>, which throws on
+        /// an unreadable payload rather than hiding it.
+        /// </remarks>
+        public bool IsDecryptable { get; init; } = true;
     }
 
     /// <summary>

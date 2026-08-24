@@ -84,10 +84,25 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
                                        selectedId.Equals(credential.AccountId, StringComparison.OrdinalIgnoreCase);
 
                         IReadOnlyList<KeyValuePair<string, string>> displayFields = [];
+                        var isDecryptable = true;
                         if (summaryProvider is not null)
                         {
-                            var decrypted = await _encryption.DecryptAsync(credential.CredentialData).ConfigureAwait(false);
-                            displayFields = summaryProvider.GetDisplayFields(decrypted);
+                            try
+                            {
+                                var decrypted = await _encryption.DecryptAsync(credential.CredentialData).ConfigureAwait(false);
+                                displayFields = summaryProvider.GetDisplayFields(decrypted);
+                            }
+                            catch (InvalidOperationException)
+                            {
+                                // The payload cannot be opened with this machine's
+                                // keystore — typically a credentials directory copied
+                                // from another machine or user, or a keystore that was
+                                // replaced while its credential files survived. Render
+                                // the row without provider columns rather than taking
+                                // down the whole listing: the user needs to see the id
+                                // to remove it with `accounts delete`.
+                                isDecryptable = false;
+                            }
                         }
 
                         credentials.Add(new CredentialSummary
@@ -99,6 +114,7 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
                             CreatedAt = credential.CreatedAt,
                             IsSelected = isSelected,
                             DisplayFields = displayFields,
+                            IsDecryptable = isDecryptable,
                         });
                     }
                 }
@@ -349,7 +365,23 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
                 var isSelected = selections.TryGetValue(credential.ProviderName, out var selectedId) &&
                     selectedId.Equals(credential.AccountId, StringComparison.OrdinalIgnoreCase);
 
-                var decrypted = await _encryption.DecryptAsync(credential.CredentialData).ConfigureAwait(false);
+                string decrypted;
+                try
+                {
+                    decrypted = await _encryption.DecryptAsync(credential.CredentialData).ConfigureAwait(false);
+                }
+                catch (InvalidOperationException)
+                {
+                    // Unreadable ciphertext: skip rather than abort. One credential
+                    // the local keystore cannot open must not veto an export of the
+                    // rest, nor an import that only needs this metadata.
+                    //
+                    // Dropped rather than emitted with an empty payload on purpose —
+                    // CredentialData flows straight into the archive, so an empty
+                    // secret would become silent corruption at the next import.
+                    // The caller reports the count instead.
+                    continue;
+                }
 
                 exports.Add(new CredentialExport
                 {

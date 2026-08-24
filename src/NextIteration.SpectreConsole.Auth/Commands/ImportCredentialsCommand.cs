@@ -109,7 +109,7 @@ namespace NextIteration.SpectreConsole.Auth.Commands
             return false;
         }
 
-        private static Func<CredentialExport, CredentialExport, ConflictResolution> BuildConflictResolver(
+        private static Func<CredentialExport, CredentialSummary, ConflictResolution> BuildConflictResolver(
             string? onConflict, ConflictResolution forcedResolution)
         {
             // An explicit --on-conflict pins the decision for every collision.

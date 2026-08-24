@@ -107,10 +107,20 @@ namespace NextIteration.SpectreConsole.Auth.Commands
                 // Cells render via Spectre markup, so user/provider-controlled
                 // values must be escaped — an account name like "[red]X[/]"
                 // would otherwise be parsed as styling rather than text.
+                var name = Markup.Escape(credential.AccountName);
+                if (!credential.IsDecryptable)
+                {
+                    // The row is rendered so its id stays visible (that is what
+                    // `accounts delete` needs), but the provider columns are blank
+                    // because the payload could not be opened. Mark it so that is
+                    // distinguishable from a provider with no summary fields.
+                    name += " [red](unreadable)[/]";
+                }
+
                 var row = new List<string>
                 {
                     CommandFormatting.ShortId(credential.AccountId),
-                    Markup.Escape(credential.AccountName),
+                    name,
                     Markup.Escape(credential.Environment),
                 };
 
@@ -130,6 +140,12 @@ namespace NextIteration.SpectreConsole.Auth.Commands
             _ = table.Expand();
 
             AnsiConsole.Write(table);
+
+            if (credentials.Exists(c => !c.IsDecryptable))
+            {
+                AnsiConsole.MarkupLine(
+                    "[grey]Rows marked (unreadable) could not be decrypted with this machine's keystore. Re-import them with 'accounts import --on-conflict overwrite', or remove them with 'accounts delete <id>'.[/]");
+            }
         }
     }
 }

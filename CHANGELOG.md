@@ -11,6 +11,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`accounts import` aborted when any existing local credential could not be decrypted**
+  (#38). The reported failure surfaced as *"Credential data failed integrity check … the
+  keystore was copied from another machine or user"* on a correct passphrase, because the
+  message came from the local keystore, not the archive. `ImportAsync` called
+  `ExportCredentialsAsync` to build its conflict index, and the file backend's `DecryptAsync`
+  there sat outside the `try`/`catch` — so one unreadable credential file in the destination
+  vetoed the whole import. That fired in exactly the situation export/import exists to fix: a
+  credentials directory carried to a new machine, then repaired via export/import.
+
+  The root cause was deeper than a missing `catch`. Conflict detection only ever needed the
+  provider, account name and environment — all stored in plaintext — never the encrypted
+  payload, and the resolver `accounts import` builds ignores the existing side entirely. The
+  index is now built from metadata via `GetProviderNamesAsync` + `ListCredentialsAsync`, so an
+  import no longer decrypts the store at all and no longer materialises every secret in memory
+  for an operation that never reads one. All the affected types are `internal`; no public API
+  change and no `ICredentialManager` member added.
+
+- **`accounts list` died entirely when one credential could not be decrypted** (#38). The same
+  unguarded decrypt in `ListCredentialsAsync` (inside a `try` catching only `JsonException`)
+  took out the whole listing for a provider whenever an `ICredentialSummaryProvider` was
+  registered for it — which also blocked the repair path, since `accounts delete <id>` needs
+  the id to be visible. A broken row now renders without its provider columns and is marked
+  `(unreadable)`, with a hint pointing at `--on-conflict overwrite` and `accounts delete`.
+
+  `CredentialSummary` gains `IsDecryptable` to distinguish "payload unreadable" from "no
+  summary provider registered". Additive: not `required`, defaults to `true`, so external
+  `ICredentialManager` implementations are unaffected.
+
+- **`accounts export` now reports credentials it had to leave out.** An unreadable credential
+  is skipped rather than aborting the export, but it is *dropped* rather than written with an
+  empty payload — `CredentialData` flows straight into the archive, so a blank secret would
+  become silent corruption at the next import. A short archive is otherwise invisible until a
+  restore comes up empty, so the count is now warned about, and an export where *everything*
+  failed to decrypt reports that and exits non-zero instead of claiming "nothing to export".
+
+  `GetSelectedCredentialAsync` and `GetCredentialByIdAsync` deliberately still throw. Those
+  are targeted fetches: returning `null` would masquerade as "no credential selected" and hand
+  a consumer a worse diagnosis than the real one. Tests pin that split so a future over-broad
+  catch cannot erode it.
+
+  File backend only — the Keychain and libsecret backends read secrets straight from the OS
+  store and never call `ICredentialEncryption`.
+
 - **The README's Contributing section pointed at the retired `TODO.md`.** That file was
   removed in #25 when its backlog moved to GitHub issues, but the change never updated the
   README, so the link has been dead since 1.0.0. The same sentence also listed keystore
