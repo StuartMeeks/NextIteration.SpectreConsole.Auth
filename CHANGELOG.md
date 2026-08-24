@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The README's Contributing section pointed at the retired `TODO.md`.** That file was
+  removed in #25 when its backlog moved to GitHub issues, but the change never updated the
+  README, so the link has been dead since 1.0.0. The same sentence also listed keystore
+  format versioning and zero-on-dispose for caller-supplied entropy as outstanding hardening
+  when both shipped in 1.0.0 — advertising finished work as a backlog. It now points at the
+  issue tracker and names only the two genuinely open items: ACL-scoped Keychain access (#18)
+  and libsecret KWallet validation (#19).
+
 ## [1.0.1] — 2026-08-22
 
 Maintenance release. No API or behavior change for consumers: a behavior-identical
