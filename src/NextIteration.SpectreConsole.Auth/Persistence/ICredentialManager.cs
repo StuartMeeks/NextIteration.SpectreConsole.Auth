@@ -69,20 +69,34 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
         Task<IEnumerable<string>> GetProviderNamesAsync();
 
         /// <summary>
-        /// Enumerates every stored credential across all providers, each with
-        /// its <b>decrypted</b> payload and current selection state. This is
-        /// the read half of the export/import feature and the counterpart to
-        /// <see cref="RestoreCredentialAsync"/>.
+        /// Enumerates the stored credentials across all providers whose payload can
+        /// be read, each with its <b>decrypted</b> payload and current selection
+        /// state. This is the read half of the export/import feature and the
+        /// counterpart to <see cref="RestoreCredentialAsync"/>.
         /// </summary>
         /// <returns>
-        /// A snapshot of all stored credentials as <see cref="CredentialExport"/>
-        /// records. The list is empty when nothing is stored.
+        /// A snapshot of the readable stored credentials as
+        /// <see cref="CredentialExport"/> records. The list is empty when nothing is
+        /// stored, or when nothing stored can be read.
         /// </returns>
         /// <remarks>
+        /// <para>
         /// Unlike <see cref="CredentialSummary"/>, the returned records carry
         /// the plaintext <see cref="CredentialExport.CredentialData"/>. Handle
         /// the result as secret material: never log it and don't persist it
         /// unencrypted.
+        /// </para>
+        /// <para>
+        /// <b>Implementations must omit a credential they cannot read</b> — one whose
+        /// ciphertext fails to decrypt, or whose secret does not load from an OS store
+        /// — rather than returning it with an empty
+        /// <see cref="CredentialExport.CredentialData"/>. The result is serialised into
+        /// portable archives, where an empty payload is indistinguishable from a real
+        /// one and silently overwrites the genuine secret on the next restore. This
+        /// means the returned count can be lower than the number of stored credentials;
+        /// callers that need to report the shortfall should compare against
+        /// <see cref="ListCredentialsAsync"/>, which reads metadata only.
+        /// </para>
         /// </remarks>
         Task<IReadOnlyList<CredentialExport>> ExportCredentialsAsync();
 
@@ -146,9 +160,11 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
         public IReadOnlyList<KeyValuePair<string, string>> DisplayFields { get; init; } = [];
 
         /// <summary>
-        /// Display hint: <see langword="false"/> when the stored payload was read
-        /// and failed to decrypt, so <see cref="DisplayFields"/> is empty for that
-        /// reason rather than because no summary provider is registered.
+        /// Display hint: <see langword="false"/> when the stored payload was asked
+        /// for and could not be produced — it failed to decrypt (file backend) or did
+        /// not load from the OS store (Keychain, libsecret) — so
+        /// <see cref="DisplayFields"/> is empty for that reason rather than because no
+        /// summary provider is registered.
         /// </summary>
         /// <remarks>
         /// This is not a guarantee that the payload <em>is</em> readable. The

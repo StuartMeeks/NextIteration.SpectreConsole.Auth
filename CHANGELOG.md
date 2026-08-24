@@ -9,6 +9,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The Keychain and libsecret backends exported an empty credential when a secret failed to
+  load** (#42). Both fabricated a blank payload rather than skipping the item —
+  `item.Secret ?? string.Empty` on libsecret, the `item.Data is not null ? … : string.Empty`
+  ternary on Keychain. Since `ExportCredentialsAsync` is the read half of `accounts export` and
+  `CredentialData` flows straight into the archive, a secret that failed to load was written to
+  the bundle as a valid-looking credential holding nothing, and the next import restored that
+  over a real secret — surfacing only later, as an empty credential at authentication time.
+
+  This is the same silent-corruption shape 1.1.0 fixed in the file backend, reached by a
+  different route: there the payload failed to *decrypt*, here it fails to *load* from the OS
+  store (a locked collection, an item removed between enumeration and read, or a per-item
+  D-Bus/Security.framework failure). Such an item is now skipped, matching the file backend, and
+  `accounts export` already warns with the skipped count.
+
+  On libsecret the skip needed a fix one layer down to work at all.
+  `LibsecretInterop.ReadSecretValueAsString` returned `string.Empty` for a NULL `SecretValue`,
+  collapsing "the secret did not load" into "the secret is an empty string" before the manager
+  ever saw it — so a guard on `item.Secret is null` could never fire. It now returns `string?`
+  and yields `null` in that case, which is the state
+  `secret_retrievable_retrieve_secret_sync` reports (without setting a GError) when an item
+  vanishes between the search and the retrieve. An empty-but-present secret, a valid data pointer
+  of length zero, is still a legitimate stored value and still reads as `string.Empty`.
+
+  `ListCredentialsAsync` on both backends now also reports `IsDecryptable = false` when a
+  summary provider is registered but the secret did not load, so the flag added in 1.1.0 means
+  the same thing on all three backends rather than only on the file one. On libsecret this
+  depended on the same interop fix; it additionally stops `GetDisplayFields` being handed an
+  empty string, which a JSON-parsing summary provider would have thrown on, taking down the whole
+  listing.
+
+  Scope of the skip, stated precisely: it covers an item that disappears between enumeration and
+  read. A locked collection or a per-item transport error still aborts the whole export —
+  libsecret sets a GError and Keychain returns a non-`errSecItemNotFound` status, and both are
+  raised rather than skipped. The targeted fetch paths were already correct and are unchanged.
+
+  `ICredentialManager.ExportCredentialsAsync` is documented accordingly: implementations **must**
+  omit a credential they cannot read rather than return it with an empty payload, and the returned
+  count can therefore be lower than the number stored.
+
 ## [1.1.0] — 2026-08-24
 
 One behaviour fix, one additive public member, three documentation fixes. Credentials the local

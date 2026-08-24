@@ -130,6 +130,12 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Keychain
                     DisplayFields = summaryProvider is not null && i.Data is not null
                         ? summaryProvider.GetDisplayFields(Encoding.UTF8.GetString(i.Data))
                         : [],
+
+                    // False only when the data was actually asked for and did not
+                    // arrive, matching the file backend's meaning of the flag: with
+                    // no summary provider registered nothing is loaded, so there is
+                    // nothing to report.
+                    IsDecryptable = summaryProvider is null || i.Data is not null,
                 })
                 .OrderBy(c => c.AccountName)
                 .ToList();
@@ -269,6 +275,25 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Keychain
             {
                 var providerName = ProviderNameFromService(item.Service)!;
 
+                if (item.Data is null)
+                {
+                    // Requested but absent. Reachable only when the item was removed
+                    // between enumeration and read: QuerySingleItem returns null solely
+                    // for errSecItemNotFound, and every other status goes through
+                    // ThrowIfError. A locked keychain or a denied read
+                    // (errSecInteractionNotAllowed, errSecAuthFailed) therefore still
+                    // aborts the whole export rather than skipping one item.
+                    //
+                    // Skip it. CredentialData flows straight into the archive, so an
+                    // empty payload would write a valid-looking credential holding
+                    // nothing, and the next import would restore that over a real
+                    // secret. The caller reports the skipped count.
+                    //
+                    // Checked before the selection lookup so a skipped item costs no
+                    // keychain round-trip.
+                    continue;
+                }
+
                 if (!selectionCache.TryGetValue(providerName, out var selectedId))
                 {
                     selectedId = ReadSelection(providerName);
@@ -281,7 +306,7 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Keychain
                     AccountName = item.Label ?? string.Empty,
                     ProviderName = providerName,
                     Environment = item.Description ?? string.Empty,
-                    CredentialData = item.Data is not null ? Encoding.UTF8.GetString(item.Data) : string.Empty,
+                    CredentialData = Encoding.UTF8.GetString(item.Data),
                     CreatedAt = item.CreatedAt ?? DateTime.MinValue,
                     IsSelected = selectedId is not null && string.Equals(selectedId, item.Account, StringComparison.OrdinalIgnoreCase),
                 });

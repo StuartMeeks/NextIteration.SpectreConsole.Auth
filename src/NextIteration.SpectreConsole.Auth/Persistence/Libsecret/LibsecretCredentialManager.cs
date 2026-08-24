@@ -153,6 +153,12 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Libsecret
                     DisplayFields = summaryProvider is not null && i.Secret is not null
                         ? summaryProvider.GetDisplayFields(i.Secret)
                         : [],
+
+                    // False only when the secret was actually asked for and did not
+                    // arrive, matching the file backend's meaning of the flag: with
+                    // no summary provider registered nothing is loaded, so there is
+                    // nothing to report.
+                    IsDecryptable = summaryProvider is null || i.Secret is not null,
                 })
                 .OrderBy(c => c.AccountName)
                 .ToList();
@@ -317,6 +323,25 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Libsecret
                     continue;
                 }
 
+                if (item.Secret is null)
+                {
+                    // The secret was requested but did not materialise. Reachable when
+                    // the item vanished between the search and the retrieve, which
+                    // libsecret reports as a NULL SecretValue *without* a GError. A
+                    // locked collection or a per-item D-Bus error sets a GError instead
+                    // and aborts the whole export via ThrowIfGError — per-item recovery
+                    // from those is not attempted here.
+                    //
+                    // Skip it. CredentialData flows straight into the archive, so
+                    // exporting an empty payload would write a valid-looking credential
+                    // holding nothing, and the next import would restore that over a
+                    // real secret. The caller reports the skipped count.
+                    //
+                    // Checked before the selection lookup so a skipped item costs no
+                    // keyring round-trip.
+                    continue;
+                }
+
                 if (!selectionCache.TryGetValue(providerName, out var selectedId))
                 {
                     selectedId = ReadSelection(providerName);
@@ -331,7 +356,7 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Libsecret
                     AccountName = item.Attributes.GetValueOrDefault(AttrLabel, string.Empty),
                     ProviderName = providerName,
                     Environment = item.Attributes.GetValueOrDefault(AttrEnvironment, string.Empty),
-                    CredentialData = item.Secret ?? string.Empty,
+                    CredentialData = item.Secret,
                     CreatedAt = ParseCreatedAt(item.Attributes.GetValueOrDefault(AttrCreatedAt)),
                     IsSelected = selectedId is not null && string.Equals(selectedId, accountId, StringComparison.OrdinalIgnoreCase),
                 });
