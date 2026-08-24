@@ -153,6 +153,12 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Libsecret
                     DisplayFields = summaryProvider is not null && i.Secret is not null
                         ? summaryProvider.GetDisplayFields(i.Secret)
                         : [],
+
+                    // False only when the secret was actually asked for and did not
+                    // arrive, matching the file backend's meaning of the flag: with
+                    // no summary provider registered nothing is loaded, so there is
+                    // nothing to report.
+                    IsDecryptable = summaryProvider is null || i.Secret is not null,
                 })
                 .OrderBy(c => c.AccountName)
                 .ToList();
@@ -323,6 +329,19 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Libsecret
                     selectionCache[providerName] = selectedId;
                 }
 
+                if (item.Secret is null)
+                {
+                    // The secret was requested but did not materialise — a locked
+                    // collection that could not be unlocked, an item removed between
+                    // enumeration and read, or a per-item D-Bus failure.
+                    //
+                    // Skip it. CredentialData flows straight into the archive, so
+                    // exporting an empty payload here would write a valid-looking
+                    // credential holding nothing, and the next import would restore
+                    // that over a real secret. The caller reports the skipped count.
+                    continue;
+                }
+
                 var accountId = item.Attributes.GetValueOrDefault(AttrAccount, string.Empty);
 
                 exports.Add(new CredentialExport
@@ -331,7 +350,7 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Libsecret
                     AccountName = item.Attributes.GetValueOrDefault(AttrLabel, string.Empty),
                     ProviderName = providerName,
                     Environment = item.Attributes.GetValueOrDefault(AttrEnvironment, string.Empty),
-                    CredentialData = item.Secret ?? string.Empty,
+                    CredentialData = item.Secret,
                     CreatedAt = ParseCreatedAt(item.Attributes.GetValueOrDefault(AttrCreatedAt)),
                     IsSelected = selectedId is not null && string.Equals(selectedId, accountId, StringComparison.OrdinalIgnoreCase),
                 });

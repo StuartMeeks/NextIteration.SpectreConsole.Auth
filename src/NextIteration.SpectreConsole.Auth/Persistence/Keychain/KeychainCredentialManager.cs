@@ -130,6 +130,12 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Keychain
                     DisplayFields = summaryProvider is not null && i.Data is not null
                         ? summaryProvider.GetDisplayFields(Encoding.UTF8.GetString(i.Data))
                         : [],
+
+                    // False only when the data was actually asked for and did not
+                    // arrive, matching the file backend's meaning of the flag: with
+                    // no summary provider registered nothing is loaded, so there is
+                    // nothing to report.
+                    IsDecryptable = summaryProvider is null || i.Data is not null,
                 })
                 .OrderBy(c => c.AccountName)
                 .ToList();
@@ -275,13 +281,25 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Keychain
                     selectionCache[providerName] = selectedId;
                 }
 
+                if (item.Data is null)
+                {
+                    // Requested but absent — the item was removed between enumeration
+                    // and read, or Security.framework failed on this one item.
+                    //
+                    // Skip it. CredentialData flows straight into the archive, so an
+                    // empty payload here would write a valid-looking credential
+                    // holding nothing, and the next import would restore that over a
+                    // real secret. The caller reports the skipped count.
+                    continue;
+                }
+
                 exports.Add(new CredentialExport
                 {
                     AccountId = item.Account!, // non-null: guaranteed by the Where filter above
                     AccountName = item.Label ?? string.Empty,
                     ProviderName = providerName,
                     Environment = item.Description ?? string.Empty,
-                    CredentialData = item.Data is not null ? Encoding.UTF8.GetString(item.Data) : string.Empty,
+                    CredentialData = Encoding.UTF8.GetString(item.Data),
                     CreatedAt = item.CreatedAt ?? DateTime.MinValue,
                     IsSelected = selectedId is not null && string.Equals(selectedId, item.Account, StringComparison.OrdinalIgnoreCase),
                 });

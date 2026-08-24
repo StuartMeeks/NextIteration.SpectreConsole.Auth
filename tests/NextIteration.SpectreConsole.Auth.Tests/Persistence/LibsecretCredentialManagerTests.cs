@@ -480,6 +480,52 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
             var field = Assert.Single(credential.DisplayFields);
             Assert.Equal("Fingerprint", field.Key);
             Assert.Equal("xyz", field.Value);
+
+            // The secret loaded, so the row is not flagged. The false branch needs a
+            // secret that fails to load, which cannot be forced through the static
+            // P/Invoke surface — see #42.
+            Assert.True(credential.IsDecryptable);
+        }
+
+        [Fact]
+        [SupportedOSPlatform("linux")]
+        public async Task ListCredentialsAsync_NoSummaryProvider_ReportsDecryptable()
+        {
+            if (_skip)
+            {
+                return;
+            }
+
+            var manager = NewManager(); // no summary provider
+
+            _ = await manager.AddCredentialAsync("Adobe", "prod", "Production", "{\"apiKey\":\"xyz\"}");
+            var list = (await manager.ListCredentialsAsync("Adobe")).ToList();
+
+            // No summary provider means the secret is never requested, so there is
+            // nothing to report and the flag stays true — the same meaning the file
+            // backend gives it.
+            Assert.True(Assert.Single(list).IsDecryptable);
+        }
+
+        [Fact]
+        [SupportedOSPlatform("linux")]
+        public async Task ExportCredentialsAsync_CarriesTheRealSecret()
+        {
+            if (_skip)
+            {
+                return;
+            }
+
+            var manager = NewManager();
+            var id = await manager.AddCredentialAsync("Adobe", "prod", "Production", "{\"apiKey\":\"xyz\"}");
+
+            var exported = Assert.Single(await manager.ExportCredentialsAsync());
+
+            // Guards the skip added for #42: a readable credential must still be
+            // exported, and with its real payload rather than an empty string.
+            Assert.Equal(id, exported.AccountId);
+            Assert.Equal("{\"apiKey\":\"xyz\"}", exported.CredentialData);
+            Assert.NotEqual(string.Empty, exported.CredentialData);
         }
 
         private sealed class FakeAdobeSummaryProvider : ICredentialSummaryProvider
