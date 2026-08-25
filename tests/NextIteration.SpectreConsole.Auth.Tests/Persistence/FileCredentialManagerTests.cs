@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 using NextIteration.SpectreConsole.Auth.Commands;
 using NextIteration.SpectreConsole.Auth.Encryption;
 using NextIteration.SpectreConsole.Auth.Persistence;
@@ -294,9 +296,26 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
             using var temp = new TempDir();
             var manager = CreateManager(temp.Path);
             var accountId = await manager.AddCredentialAsync("Adobe", "prod", "Production", "{}");
-            _ = await manager.SelectCredentialAsync(accountId);
+            var unrelated = await manager.AddCredentialAsync("Airtable", "main", "Production", "{}");
+            Assert.True(await manager.SelectCredentialAsync(accountId));
+            Assert.True(await manager.SelectCredentialAsync(unrelated));
 
             _ = await manager.DeleteCredentialAsync(accountId);
+
+            // Asserted on the selection record itself, not through
+            // GetSelectedCredentialAsync. That returns null once the credential file is
+            // gone whether or not the selection was cleared, so the previous assertion
+            // passed even with the whole clearing block deleted (#50). The record is the
+            // only thing that actually distinguishes the two.
+            var selectionFile = Path.Join(temp.Path, "selections.json");
+            var selections = JsonSerializer.Deserialize<Dictionary<string, string>>(
+                await File.ReadAllTextAsync(selectionFile, TestContext.Current.CancellationToken))!;
+
+            Assert.False(selections.ContainsKey("Adobe"));
+
+            // And the delete must not disturb an unrelated provider's selection.
+            Assert.True(selections.ContainsKey("Airtable"));
+            Assert.Equal(unrelated, selections["Airtable"]);
 
             Assert.Null(await manager.GetSelectedCredentialAsync("Adobe"));
         }
