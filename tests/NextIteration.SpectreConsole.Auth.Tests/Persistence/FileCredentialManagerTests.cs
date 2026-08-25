@@ -812,6 +812,31 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
             Assert.Equal("{}", await manager.GetSelectedCredentialAsync("Adobe"));
         }
 
+        [Fact]
+        public async Task SelectCredentialAsync_ReplacingAnExistingSelection_LeavesExactlyOneSelected()
+        {
+            using var temp = new TempDir();
+            var manager = CreateManager(temp.Path);
+
+            var prod = await manager.AddCredentialAsync("Adobe", "prod", "Production", "{\"k\":\"PROD\"}");
+            var sandbox = await manager.AddCredentialAsync("Adobe", "sandbox", "Sandbox", "{\"k\":\"SANDBOX\"}");
+
+            Assert.True(await manager.SelectCredentialAsync(prod));
+            Assert.Equal("{\"k\":\"PROD\"}", await manager.GetSelectedCredentialAsync("Adobe"));
+
+            // Switching between a prod and a sandbox credential is the headline use case in
+            // the README, and no test ever exercised the replace path -- only first
+            // selections and negative cases (#51).
+            Assert.True(await manager.SelectCredentialAsync(sandbox));
+            Assert.Equal("{\"k\":\"SANDBOX\"}", await manager.GetSelectedCredentialAsync("Adobe"));
+
+            var listed = (await manager.ListCredentialsAsync("Adobe")).ToList();
+            Assert.Equal(2, listed.Count);
+            Assert.Single(listed, c => c.IsSelected);
+            Assert.True(listed.Single(c => c.AccountId == sandbox).IsSelected);
+            Assert.False(listed.Single(c => c.AccountId == prod).IsSelected);
+        }
+
         /// <summary>
         /// Minimal summary provider used only to verify that
         /// <see cref="FileCredentialManager.ListCredentialsAsync"/> routes

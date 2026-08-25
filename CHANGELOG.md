@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Replacing an existing selection was never tested on any backend** (#51). Every
+  `SelectCredentialAsync` call in the suite was either a first selection or a negative case,
+  and the only multi-select test used *different* providers — so `KeychainCredentialManager`'s
+  `WriteSelection` never reached its `SecItemUpdate` branch, and the equivalent replace paths
+  on libsecret and the file backend were equally unexercised. That is the path every
+  `accounts select` after the first takes, and swapping between a prod and a sandbox
+  credential is the headline use case in the README. All three backends now have a test that
+  selects a second credential for the same provider and asserts exactly one ends up selected,
+  with the right payload resolved.
+
 - **`DeleteCredentialAsync_ClearsSelection` asserted a null that the credential's absence
   produced anyway** (#50), on all three backends. `GetSelectedCredentialAsync` resolves the id
   from the selection record and then reads the credential, which is gone — so it returned null

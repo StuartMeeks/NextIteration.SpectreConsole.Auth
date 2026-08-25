@@ -581,6 +581,33 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
             Assert.False(await manager.DeleteCredentialAsync(id));
         }
 
+        [Fact]
+        [SupportedOSPlatform("linux")]
+        public async Task SelectCredentialAsync_ReplacingAnExistingSelection_LeavesExactlyOneSelected()
+        {
+            Assert.SkipWhen(_skip, SkipReason);
+
+            var manager = NewManager();
+            var prod = await manager.AddCredentialAsync("Adobe", "prod", "Production", "{\"k\":\"PROD\"}");
+            var sandbox = await manager.AddCredentialAsync("Adobe", "sandbox", "Sandbox", "{\"k\":\"SANDBOX\"}");
+
+            Assert.True(await RetryHelper.UntilTrueAsync(() => manager.SelectCredentialAsync(prod)));
+            Assert.Equal("{\"k\":\"PROD\"}", await manager.GetSelectedCredentialAsync("Adobe"));
+
+            // The second selection for the same provider takes the update-an-existing-record
+            // branch, which no test reached before (#51) -- on this backend that is the
+            // difference between writing a new item and updating the one already there.
+            Assert.True(await RetryHelper.UntilTrueAsync(() => manager.SelectCredentialAsync(sandbox)));
+            Assert.Equal("{\"k\":\"SANDBOX\"}", await manager.GetSelectedCredentialAsync("Adobe"));
+
+            var listed = await RetryHelper.UntilAsync(
+                () => manager.ListCredentialsAsync("Adobe"),
+                r => r.Count() == 2 && r.Count(c => c.IsSelected) == 1);
+
+            Assert.True(listed.Single(c => c.AccountId == sandbox).IsSelected);
+            Assert.False(listed.Single(c => c.AccountId == prod).IsSelected);
+        }
+
         private sealed class FakeAdobeSummaryProvider : ICredentialSummaryProvider
         {
             public string ProviderName => "Adobe";
