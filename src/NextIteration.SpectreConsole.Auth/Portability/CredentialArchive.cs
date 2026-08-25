@@ -30,6 +30,19 @@ namespace NextIteration.SpectreConsole.Auth.Portability
         private const int KeySize = 32; // AES-256
         private const int Pbkdf2Iterations = 600_000; // matches LocalFileCredentialEncryption / OWASP 2023
 
+        // Bounds on the iteration count an archive may ask for on open. The field exists so
+        // an archive written by a future build with a different cost still opens, but it
+        // arrives from an untrusted file and feeds straight into PBKDF2, so it needs both
+        // ends clamped:
+        //   - the ceiling stops a hostile or corrupt archive specifying up to int.MaxValue
+        //     and hanging `accounts import` on CPU before any passphrase check can fail;
+        //   - the floor stops an archive advertising a work factor below what this library
+        //     documents, which would silently weaken the key derivation on open.
+        // The ceiling is a generous multiple of the current cost so a future increase still
+        // opens without a code change (#53).
+        private const int MinPbkdf2Iterations = Pbkdf2Iterations;
+        private const int MaxPbkdf2Iterations = Pbkdf2Iterations * 20; // ~12M, seconds not hours
+
         private static readonly JsonSerializerOptions _jsonOptions = new()
         {
             WriteIndented = true,
@@ -127,10 +140,19 @@ namespace NextIteration.SpectreConsole.Auth.Portability
                 throw new InvalidOperationException("The credential archive is corrupt (invalid base64).", ex);
             }
 
-            // Honour the archive's stated iteration count so archives written by
-            // a future build with a different cost still open; fall back to the
-            // current default if the field is absent or nonsensical.
-            var iterations = envelope.Iterations > 0 ? envelope.Iterations : Pbkdf2Iterations;
+            // Honour the archive's stated iteration count so archives written by a future
+            // build with a different cost still open. Absent (0) means a build that predates
+            // the field, so fall back to the current default; anything outside the supported
+            // band is rejected rather than clamped, because silently deriving with a
+            // different work factor than the file asks for would just fail the tag check
+            // with a misleading "wrong passphrase" message.
+            var iterations = envelope.Iterations == 0 ? Pbkdf2Iterations : envelope.Iterations;
+            if (iterations < MinPbkdf2Iterations || iterations > MaxPbkdf2Iterations)
+            {
+                throw new InvalidOperationException(
+                    $"The credential archive requests {iterations} PBKDF2 iterations, outside the supported range " +
+                    $"{MinPbkdf2Iterations}–{MaxPbkdf2Iterations}. The file is corrupt or was not written by this library.");
+            }
             var key = Rfc2898DeriveBytes.Pbkdf2(passphrase, salt, iterations, HashAlgorithmName.SHA256, KeySize);
 
             byte[] plaintext;
