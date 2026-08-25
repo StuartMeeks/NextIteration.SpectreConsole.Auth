@@ -128,6 +128,7 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Libsecret
         public Task<IEnumerable<CredentialSummary>> ListCredentialsAsync(string providerName)
         {
             ValidateProviderName(providerName);
+            providerName = ResolveStoredProviderName(providerName);
             _summaryProviders.TryGetValue(providerName, out var summaryProvider);
 
             var selectedId = ReadSelection(providerName);
@@ -245,6 +246,7 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Libsecret
         public Task<string?> GetSelectedCredentialAsync(string providerName)
         {
             ValidateProviderName(providerName);
+            providerName = ResolveStoredProviderName(providerName);
             var selectedId = ReadSelection(providerName);
             if (selectedId is null)
             {
@@ -258,6 +260,7 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Libsecret
         public Task<string?> GetCredentialByIdAsync(string providerName, string accountId)
         {
             ValidateProviderName(providerName);
+            providerName = ResolveStoredProviderName(providerName);
             ValidateAccountId(accountId);
 
             return Task.FromResult(LookupCredentialByAccountId(providerName, accountId));
@@ -451,6 +454,41 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Libsecret
                 out var parsed)
                 ? parsed
                 : DateTime.MinValue;
+        }
+
+        /// <summary>
+        /// Maps a caller-supplied provider name onto the spelling this store actually
+        /// used, so lookups match case-insensitively like the file backend's do.
+        /// </summary>
+        /// <remarks>
+        /// Resolution rather than normalisation is deliberate. The provider name is part
+        /// of this backend's storage key, so lowercasing the key would orphan every item
+        /// already stored under a mixed-case spelling. Resolving instead leaves the stored
+        /// format untouched: the caller's spelling is matched against what is on disk and
+        /// the stored spelling is used for the query. Falls back to the caller's spelling
+        /// when nothing matches, so a genuine miss still behaves as a miss (#49).
+        /// </remarks>
+        private string ResolveStoredProviderName(string providerName)
+        {
+            var items = SearchItems(
+                new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    [AttrApp] = _appIdentifier,
+                    [AttrKind] = KindCredential,
+                },
+                loadSecrets: false);
+
+            foreach (var item in items)
+            {
+                var stored = item.Attributes.GetValueOrDefault(AttrProvider);
+                if (!string.IsNullOrEmpty(stored) &&
+                    stored.Equals(providerName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return stored;
+                }
+            }
+
+            return providerName;
         }
 
         private static void ValidateProviderName(string providerName)
