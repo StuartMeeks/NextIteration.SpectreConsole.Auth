@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`DeleteCredentialAsync_ClearsSelection` asserted a null that the credential's absence
+  produced anyway** (#50), on all three backends. `GetSelectedCredentialAsync` resolves the id
+  from the selection record and then reads the credential, which is gone — so it returned null
+  whether or not the selection had been cleared, and the test passed with the entire clearing
+  block deleted. The file and libsecret tests now assert on the selection **record** itself
+  (`selections.json`, and the keyring's selection item via interop), which fails against a
+  removed clearing block. All three also pin that an unrelated provider's selection survives
+  the delete, catching over-broad clearing. The Keychain assertion remains weaker by
+  necessity — reaching its selection item would need a Security.framework query from the test
+  — and says so in place rather than reading as equivalent coverage.
+
 - **libsecret leaked `SecretRetrievable` references when its search loop threw** (#56). The
   per-item `g_object_unref` was the last statement of the loop body, so a throw part-way
   through — `ThrowIfGError` on a locked collection or a per-item D-Bus error — skipped the

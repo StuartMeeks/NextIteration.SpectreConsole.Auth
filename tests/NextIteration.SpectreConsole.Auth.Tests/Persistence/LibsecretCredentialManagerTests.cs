@@ -358,9 +358,36 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
             var accountId = await manager.AddCredentialAsync("Adobe", "prod", "Production", "{}");
             _ = await manager.SelectCredentialAsync(accountId);
 
+            var unrelated = await manager.AddCredentialAsync("Airtable", "main", "Production", "{}");
+            Assert.True(await RetryHelper.UntilTrueAsync(() => manager.SelectCredentialAsync(unrelated)));
+
             _ = await RetryHelper.UntilTrueAsync(() => manager.DeleteCredentialAsync(accountId));
 
+            // GetSelectedCredentialAsync returns null once the credential is gone whether
+            // or not the selection was cleared, so it cannot distinguish the two (#50).
+            // The selection is its own keyring item, so assert on that directly.
+            var stale = LibsecretInterop.NewAttributes(new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["nextIteration.sca.app"] = _appIdentifier,
+                ["nextIteration.sca.kind"] = "selection",
+                ["nextIteration.sca.provider"] = "Adobe",
+            });
+            try
+            {
+                var found = LibsecretInterop.secret_password_searchv_sync(
+                    IntPtr.Zero, stale, LibsecretInterop.SecretSearchAll, IntPtr.Zero, out var error);
+                Assert.Equal(IntPtr.Zero, error);
+                Assert.Equal(IntPtr.Zero, found);
+            }
+            finally
+            {
+                LibsecretInterop.g_hash_table_unref(stale);
+            }
+
             Assert.Null(await manager.GetSelectedCredentialAsync("Adobe"));
+
+            // An unrelated provider's selection must survive the delete.
+            Assert.Equal("{}", await manager.GetSelectedCredentialAsync("Airtable"));
         }
 
         [Fact]

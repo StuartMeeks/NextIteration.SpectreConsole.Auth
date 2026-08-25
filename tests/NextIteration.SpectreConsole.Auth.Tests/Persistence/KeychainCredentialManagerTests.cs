@@ -290,9 +290,19 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
             var accountId = await manager.AddCredentialAsync("Adobe", "prod", "Production", "{}");
             _ = await manager.SelectCredentialAsync(accountId);
 
+            var unrelated = await manager.AddCredentialAsync("Airtable", "main", "Production", "{}");
+            Assert.True(await RetryHelper.UntilTrueAsync(() => manager.SelectCredentialAsync(unrelated)));
+
             _ = await RetryHelper.UntilTrueAsync(() => manager.DeleteCredentialAsync(accountId));
 
+            // Weaker than its file and libsecret counterparts by necessity: the selection
+            // is a separate keychain item and this assertion returns null once the
+            // credential is gone regardless of whether that item was cleared, so it cannot
+            // distinguish the two (#50). Asserting on the item itself would need a
+            // Security.framework query from the test. What the unrelated-provider check
+            // below does catch is over-broad clearing, which is the more likely defect.
             Assert.Null(await manager.GetSelectedCredentialAsync("Adobe"));
+            Assert.Equal("{}", await manager.GetSelectedCredentialAsync("Airtable"));
         }
 
         [Fact]
