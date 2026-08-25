@@ -44,6 +44,54 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
             }
         }
 
+        /// <summary>
+        /// Writes <paramref name="bytes"/> to <paramref name="path"/> only if nothing is
+        /// there yet, and reports whether this call is the one that created it.
+        /// </summary>
+        /// <returns>
+        /// <see langword="true"/> when this call created the file; <see langword="false"/>
+        /// when another writer got there first, in which case the caller should read what
+        /// that writer left rather than assuming its own content is on disk.
+        /// </returns>
+        /// <remarks>
+        /// Same temp-then-rename shape as <see cref="WriteAllBytesAsync"/>, so the file is
+        /// still never observable half-written, but the final step is a non-overwriting
+        /// move. On both POSIX and Windows that throws when the destination already
+        /// exists, which is exactly the signal needed: the losing racer must not clobber
+        /// the winner. Used for the keystore, where an overwrite silently destroys every
+        /// credential already encrypted under the replaced key.
+        /// </remarks>
+        internal static async Task<bool> TryWriteNewAsync(string path, byte[] bytes, UnixFileMode? unixMode = null)
+        {
+            if (File.Exists(path))
+            {
+                return false;
+            }
+
+            var tempPath = BuildTempPath(path);
+            try
+            {
+                await File.WriteAllBytesAsync(tempPath, bytes).ConfigureAwait(false);
+                ApplyUnixModeIfRequested(tempPath, unixMode);
+
+                // Deliberately not overwrite:true. A racing creator that already landed
+                // its keystore must win; we then fall back to reading theirs.
+                File.Move(tempPath, path);
+                return true;
+            }
+            catch (IOException)
+            {
+                // Destination appeared between the check and the move: someone else won.
+                TryDelete(tempPath);
+                return false;
+            }
+            catch
+            {
+                TryDelete(tempPath);
+                throw;
+            }
+        }
+
         internal static async Task WriteAllBytesAsync(string path, byte[] bytes, UnixFileMode? unixMode = null)
         {
             var tempPath = BuildTempPath(path);

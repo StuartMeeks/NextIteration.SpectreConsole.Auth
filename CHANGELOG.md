@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Two concurrent first runs could silently destroy one set of credentials** (#44). Keystore
+  creation was an unlocked check-then-write: both invocations found no `.keystore`, both spent
+  ~200ms deriving a KEK, and the second write replaced the first via an unconditional atomic
+  overwrite. Anything the first process had already encrypted was then permanently
+  undecryptable — and it surfaced as the same "failed integrity check" message as a keystore
+  copied between machines, so it was easy to misdiagnose. `AtomicFile` gains
+  `TryWriteNewAsync`, a temp-then-**non-overwriting**-rename, so the losing racer discards its
+  key and adopts the winner's instead of persisting data under a key no longer on disk.
+  Crash-safety is unchanged; only the final rename's overwrite behaviour differs.
+
 - **The Keychain and libsecret backends exported an empty credential when a secret failed to
   load** (#42). Both fabricated a blank payload rather than skipping the item —
   `item.Secret ?? string.Empty` on libsecret, the `item.Data is not null ? … : string.Empty`
