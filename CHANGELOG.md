@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`SelectionsLock`'s sentinel cleanup and exhaustion path were untested** (#57). The suite
+  covered acquire, contend and re-acquire, but never asserted that `FileOptions.DeleteOnClose`
+  actually removes the sentinel — one test's comment claimed it without checking — so dropping
+  that flag would have left a permanent lock file and still passed. The ~5.1 s backoff ladder
+  ending in a thrown `IOException` was never reached either, leaving its message and its
+  behaviour under a stuck peer unverified. Both are now asserted, along with the lock's actual
+  job: four concurrent holders with overlapping critical sections detected directly, rather
+  than inferred from one same-process test.
+
 - **The Windows ACL hardening was verified by no test, behind a comment claiming it was**
   (#47). `CredentialsDirectoryTests` skipped its Windows case with *"verified via the file-perm
   integration path"*, and no such path existed anywhere in the suite — grepping for
