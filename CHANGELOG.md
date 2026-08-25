@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **An imported archive dictated its own PBKDF2 iteration count, unbounded** (#53). The value
+  came from the archive's clear-text envelope with only a `> 0` check and fed straight into
+  `Rfc2898DeriveBytes.Pbkdf2`. `Iterations` is an `int`, so a hostile or corrupt archive could
+  ask for up to ~2.1 billion and hang `accounts import` on CPU before any passphrase check
+  could fail — and could equally advertise `1`, silently deriving with a work factor far below
+  what the library documents. The count is now required to fall between the documented 600,000
+  and a generous ceiling (20×), with `0` still meaning "written before the field existed" and
+  falling back to the default. Out-of-band values are **rejected rather than clamped**:
+  deriving with a different work factor than the file asks for would just fail the
+  authentication tag and surface as a misleading "wrong passphrase".
+
 - **The libsecret backend reported a successful delete when nothing was deleted** (#45).
   `ClearItem` discarded the gboolean from `secret_password_clearv_sync` and
   `DeleteCredentialAsync` returned `true` unconditionally, so `accounts delete` printed

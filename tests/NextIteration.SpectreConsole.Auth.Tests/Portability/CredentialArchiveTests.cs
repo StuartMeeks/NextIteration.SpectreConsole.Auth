@@ -102,5 +102,54 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Portability
                 () => CredentialArchive.Deserialize(future, Passphrase));
             Assert.Contains("version", ex.Message, StringComparison.OrdinalIgnoreCase);
         }
+
+        [Theory]
+        [InlineData(int.MaxValue)]      // would hang import on CPU before any passphrase check
+        [InlineData(2_000_000_000)]
+        [InlineData(1)]                 // below the documented work factor
+        [InlineData(599_999)]
+        public void Deserialize_IterationCountOutsideTheSupportedBand_Throws(int iterations)
+        {
+            var bundle = CredentialArchive.Serialize([Sample("prod", "{}")], Passphrase);
+            var tampered = WithIterations(bundle, iterations);
+
+            // The count arrives from an untrusted file and feeds straight into PBKDF2 (#53).
+            var ex = Assert.Throws<InvalidOperationException>(
+                () => CredentialArchive.Deserialize(tampered, Passphrase));
+            Assert.Contains("outside the supported range", ex.Message, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void Deserialize_IterationCountAbsent_FallsBackToTheDefault()
+        {
+            var bundle = CredentialArchive.Serialize([Sample("prod", "{}")], Passphrase);
+
+            // 0 means an archive written before the field existed; it must still open.
+            var legacy = WithIterations(bundle, 0);
+
+            var restored = Assert.Single(CredentialArchive.Deserialize(legacy, Passphrase));
+            Assert.Equal("prod", restored.AccountName);
+        }
+
+        [Fact]
+        public void Deserialize_IterationCountAtTheBandEdges_StillOpens()
+        {
+            var bundle = CredentialArchive.Serialize([Sample("prod", "{}")], Passphrase);
+
+            // The advertised default sits on the floor, so a round trip must survive it.
+            var atFloor = WithIterations(bundle, 600_000);
+            Assert.Single(CredentialArchive.Deserialize(atFloor, Passphrase));
+        }
+
+        /// <summary>
+        /// Rewrites the envelope's clear-text iteration count, leaving the encrypted
+        /// payload untouched — exactly what a hostile or corrupt archive would carry.
+        /// </summary>
+        private static string WithIterations(string bundle, int iterations)
+        {
+            var node = System.Text.Json.Nodes.JsonNode.Parse(bundle)!;
+            node["iterations"] = iterations;
+            return node.ToJsonString();
+        }
     }
 }
