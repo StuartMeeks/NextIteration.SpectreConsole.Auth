@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`RestoreCredentialAsync_Preserves…` flaked on the OS-native backends** (#61). The test
+  retried until one credential was visible and then asserted `IsSelected`, which comes from a
+  *separate* store item written moments earlier — so the credential could become visible
+  before the selection did and the assertion ran against a half-visible store. Observed once
+  on the macOS runner. The retry predicate now covers the property being asserted.
+
 - **`SelectionsLock`'s sentinel cleanup and exhaustion path were untested** (#57). The suite
   covered acquire, contend and re-acquire, but never asserted that `FileOptions.DeleteOnClose`
   actually removes the sentinel — one test's comment claimed it without checking — so dropping
