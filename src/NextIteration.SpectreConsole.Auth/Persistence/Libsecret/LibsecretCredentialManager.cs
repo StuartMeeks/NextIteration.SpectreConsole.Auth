@@ -9,14 +9,22 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Libsecret
     /// <summary>
     /// <see cref="ICredentialManager"/> implementation backed by the Secret
     /// Service API (libsecret). Each credential becomes a libsecret item in
-    /// the user's default keyring (GNOME Keyring, KWallet's shim, etc.).
+    /// the user's default keyring.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// This backend is marked <b>experimental</b>. Tested against
-    /// <c>gnome-keyring-daemon</c> on Ubuntu; behaviour on other Secret
-    /// Service implementations (KWallet, <c>kwallet-secrets</c>, or the
-    /// <c>pass</c> shim) has not been verified.
+    /// This backend is marked <b>experimental</b> and is validated against
+    /// <c>gnome-keyring-daemon</c> only.
+    /// </para>
+    /// <para>
+    /// <b>KWallet is not supported.</b> Its Secret Service shim (<c>ksecretd</c>) was
+    /// tested and fails unattended in two ways (#19): it does not provide the
+    /// <c>session</c> collection GNOME Keyring offers, so selecting it fails with
+    /// <c>No such object path '/org/freedesktop/secrets/aliases/session'</c>; and against
+    /// the default collection it raises a wallet-unlock prompt, which with no GUI blocks
+    /// the calling thread forever because the synchronous libsecret entry points here are
+    /// invoked with a NULL <c>GCancellable</c>. Other Secret Service implementations are
+    /// untested.
     /// </para>
     /// <para>
     /// Requires a running Secret Service daemon. Headless containers and
