@@ -28,12 +28,12 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
     /// </remarks>
     internal static class AtomicFile
     {
-        internal static async Task WriteAllTextAsync(string path, string contents, UnixFileMode? unixMode = null)
+        internal static async Task WriteAllTextAsync(string path, string contents, UnixFileMode? unixMode = null, CancellationToken cancellationToken = default)
         {
             var tempPath = BuildTempPath(path);
             try
             {
-                await WriteTempAsync(tempPath, System.Text.Encoding.UTF8.GetBytes(contents), unixMode).ConfigureAwait(false);
+                await WriteTempAsync(tempPath, System.Text.Encoding.UTF8.GetBytes(contents), unixMode, cancellationToken).ConfigureAwait(false);
                 await ReplaceAtomicallyAsync(tempPath, path).ConfigureAwait(false);
             }
             catch
@@ -54,7 +54,7 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
         /// <c>accounts export</c> writes to a path the user chooses — exporting to <c>/tmp</c>
         /// or any shared directory exposed every secret in the store for that window (#54).
         /// </remarks>
-        private static async Task WriteTempAsync(string tempPath, byte[] bytes, UnixFileMode? unixMode)
+        private static async Task WriteTempAsync(string tempPath, byte[] bytes, UnixFileMode? unixMode, CancellationToken cancellationToken)
         {
             var options = new FileStreamOptions
             {
@@ -71,7 +71,7 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
             var stream = new FileStream(tempPath, options);
             await using (stream.ConfigureAwait(false))
             {
-                await stream.WriteAsync(bytes).ConfigureAwait(false);
+                await stream.WriteAsync(bytes, cancellationToken).ConfigureAwait(false);
             }
         }
 
@@ -92,7 +92,7 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
         /// the winner. Used for the keystore, where an overwrite silently destroys every
         /// credential already encrypted under the replaced key.
         /// </remarks>
-        internal static async Task<bool> TryWriteNewAsync(string path, byte[] bytes, UnixFileMode? unixMode = null)
+        internal static async Task<bool> TryWriteNewAsync(string path, byte[] bytes, UnixFileMode? unixMode = null, CancellationToken cancellationToken = default)
         {
             if (File.Exists(path))
             {
@@ -102,7 +102,7 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
             var tempPath = BuildTempPath(path);
             try
             {
-                await WriteTempAsync(tempPath, bytes, unixMode).ConfigureAwait(false);
+                await WriteTempAsync(tempPath, bytes, unixMode, cancellationToken).ConfigureAwait(false);
 
                 // Deliberately not overwrite:true. A racing creator that already landed
                 // its keystore must win; we then fall back to reading theirs.
@@ -122,12 +122,12 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
             }
         }
 
-        internal static async Task WriteAllBytesAsync(string path, byte[] bytes, UnixFileMode? unixMode = null)
+        internal static async Task WriteAllBytesAsync(string path, byte[] bytes, UnixFileMode? unixMode = null, CancellationToken cancellationToken = default)
         {
             var tempPath = BuildTempPath(path);
             try
             {
-                await WriteTempAsync(tempPath, bytes, unixMode).ConfigureAwait(false);
+                await WriteTempAsync(tempPath, bytes, unixMode, cancellationToken).ConfigureAwait(false);
                 await ReplaceAtomicallyAsync(tempPath, path).ConfigureAwait(false);
             }
             catch

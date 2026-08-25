@@ -38,7 +38,7 @@ namespace NextIteration.SpectreConsole.Auth.Commands
                 }
 
                 var service = new CredentialPortabilityService(_credentialManager);
-                var result = await service.ExportAsync(passphrase).ConfigureAwait(false);
+                var result = await service.ExportAsync(passphrase, cancellationToken).ConfigureAwait(false);
 
                 if (result.Count == 0)
                 {

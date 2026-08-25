@@ -50,7 +50,7 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
         }
 
         /// <inheritdoc />
-        public async Task<IEnumerable<CredentialSummary>> ListCredentialsAsync(string providerName)
+        public async Task<IEnumerable<CredentialSummary>> ListCredentialsAsync(string providerName, CancellationToken cancellationToken = default)
         {
             ValidateProviderName(providerName);
 
@@ -61,7 +61,7 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
             var credentialFiles = Directory.GetFiles(_credentialsDirectory, $"{providerPrefix}_*.json");
 
             var credentials = new List<CredentialSummary>();
-            var selections = await LoadSelectionsAsync().ConfigureAwait(false);
+            var selections = await LoadSelectionsAsync(cancellationToken).ConfigureAwait(false);
             _ = _summaryProviders.TryGetValue(providerName, out var summaryProvider);
 
             foreach (var file in credentialFiles)
@@ -69,7 +69,7 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
                 StoredCredential? credential;
                 try
                 {
-                    var content = await File.ReadAllTextAsync(file).ConfigureAwait(false);
+                    var content = await File.ReadAllTextAsync(file, cancellationToken).ConfigureAwait(false);
                     credential = JsonSerializer.Deserialize<StoredCredential>(content, _jsonOptions);
                 }
                 catch (JsonException)
@@ -138,7 +138,7 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
         }
 
         /// <inheritdoc />
-        public async Task<string> AddCredentialAsync(string providerName, string accountName, string environment, string credentialData)
+        public async Task<string> AddCredentialAsync(string providerName, string accountName, string environment, string credentialData, CancellationToken cancellationToken = default)
         {
             ValidateProviderName(providerName);
 
@@ -168,20 +168,21 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
             await AtomicFile.WriteAllTextAsync(
                 filePath,
                 json,
-                OperatingSystem.IsWindows() ? null : UnixFileMode.UserRead | UnixFileMode.UserWrite).ConfigureAwait(false);
+                OperatingSystem.IsWindows() ? null : UnixFileMode.UserRead | UnixFileMode.UserWrite,
+                cancellationToken).ConfigureAwait(false);
 
             return accountId;
         }
 
         /// <inheritdoc />
-        public async Task<bool> DeleteCredentialAsync(string accountId)
+        public async Task<bool> DeleteCredentialAsync(string accountId, CancellationToken cancellationToken = default)
         {
             if (!IsValidAccountId(accountId))
             {
                 return false;
             }
 
-            var found = await FindCredentialByAccountIdAsync(accountId).ConfigureAwait(false);
+            var found = await FindCredentialByAccountIdAsync(accountId, cancellationToken).ConfigureAwait(false);
             if (found is null)
             {
                 return false;
@@ -192,46 +193,46 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
 
             // Hold the selections lock across load+modify+save so a concurrent
             // select/delete on a different provider can't lose its update.
-            using var selectionsLock = await SelectionsLock.AcquireAsync(_selectionLockFile).ConfigureAwait(false);
-            var selections = await LoadSelectionsAsync().ConfigureAwait(false);
+            using var selectionsLock = await SelectionsLock.AcquireAsync(_selectionLockFile, cancellationToken).ConfigureAwait(false);
+            var selections = await LoadSelectionsAsync(cancellationToken).ConfigureAwait(false);
             if (selections.TryGetValue(credential.ProviderName, out var selectedId) &&
                 selectedId.Equals(accountId, StringComparison.OrdinalIgnoreCase))
             {
                 _ = selections.Remove(credential.ProviderName);
-                await SaveSelectionsAsync(selections).ConfigureAwait(false);
+                await SaveSelectionsAsync(selections, cancellationToken).ConfigureAwait(false);
             }
 
             return true;
         }
 
         /// <inheritdoc />
-        public async Task<bool> SelectCredentialAsync(string accountId)
+        public async Task<bool> SelectCredentialAsync(string accountId, CancellationToken cancellationToken = default)
         {
             if (!IsValidAccountId(accountId))
             {
                 return false;
             }
 
-            var found = await FindCredentialByAccountIdAsync(accountId).ConfigureAwait(false);
+            var found = await FindCredentialByAccountIdAsync(accountId, cancellationToken).ConfigureAwait(false);
             if (found is null)
             {
                 return false;
             }
 
             var credential = found.Value.Credential;
-            using var selectionsLock = await SelectionsLock.AcquireAsync(_selectionLockFile).ConfigureAwait(false);
-            var selections = await LoadSelectionsAsync().ConfigureAwait(false);
+            using var selectionsLock = await SelectionsLock.AcquireAsync(_selectionLockFile, cancellationToken).ConfigureAwait(false);
+            var selections = await LoadSelectionsAsync(cancellationToken).ConfigureAwait(false);
             selections[credential.ProviderName] = accountId;
-            await SaveSelectionsAsync(selections).ConfigureAwait(false);
+            await SaveSelectionsAsync(selections, cancellationToken).ConfigureAwait(false);
             return true;
         }
 
         /// <inheritdoc />
-        public async Task<string?> GetSelectedCredentialAsync(string providerName)
+        public async Task<string?> GetSelectedCredentialAsync(string providerName, CancellationToken cancellationToken = default)
         {
             ValidateProviderName(providerName);
 
-            var selections = await LoadSelectionsAsync().ConfigureAwait(false);
+            var selections = await LoadSelectionsAsync(cancellationToken).ConfigureAwait(false);
             if (!selections.TryGetValue(providerName, out var selectedId) || !IsValidAccountId(selectedId))
             {
                 // A non-GUID id can only land here via tampered selections.json;
@@ -240,16 +241,16 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
                 return null;
             }
 
-            return await ReadAndDecryptByIdAsync(providerName, selectedId).ConfigureAwait(false);
+            return await ReadAndDecryptByIdAsync(providerName, selectedId, cancellationToken).ConfigureAwait(false);
         }
 
         /// <inheritdoc />
-        public async Task<string?> GetCredentialByIdAsync(string providerName, string accountId)
+        public async Task<string?> GetCredentialByIdAsync(string providerName, string accountId, CancellationToken cancellationToken = default)
         {
             ValidateProviderName(providerName);
             ValidateAccountId(accountId);
 
-            return await ReadAndDecryptByIdAsync(providerName, accountId).ConfigureAwait(false);
+            return await ReadAndDecryptByIdAsync(providerName, accountId, cancellationToken).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -261,7 +262,7 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
         /// the account id from <c>selections.json</c>) and
         /// <see cref="GetCredentialByIdAsync"/> (which takes it directly).
         /// </summary>
-        private async Task<string?> ReadAndDecryptByIdAsync(string providerName, string accountId)
+        private async Task<string?> ReadAndDecryptByIdAsync(string providerName, string accountId, CancellationToken cancellationToken)
         {
             var fileName = $"{providerName.ToLowerInvariant()}_{accountId}.json";
             var filePath = Path.Join(_credentialsDirectory, fileName);
@@ -273,7 +274,7 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
             StoredCredential? credential;
             try
             {
-                var content = await File.ReadAllTextAsync(filePath).ConfigureAwait(false);
+                var content = await File.ReadAllTextAsync(filePath, cancellationToken).ConfigureAwait(false);
                 credential = JsonSerializer.Deserialize<StoredCredential>(content, _jsonOptions);
             }
             catch (JsonException)
@@ -289,14 +290,14 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
         /// credentials directory for <c>*_{accountId}.json</c>. AccountIds are
         /// GUIDs so the pattern is expected to match at most one file.
         /// </summary>
-        private async Task<(string FilePath, StoredCredential Credential)?> FindCredentialByAccountIdAsync(string accountId)
+        private async Task<(string FilePath, StoredCredential Credential)?> FindCredentialByAccountIdAsync(string accountId, CancellationToken cancellationToken)
         {
             var matches = Directory.GetFiles(_credentialsDirectory, $"*_{accountId}.json");
             foreach (var file in matches)
             {
                 try
                 {
-                    var content = await File.ReadAllTextAsync(file).ConfigureAwait(false);
+                    var content = await File.ReadAllTextAsync(file, cancellationToken).ConfigureAwait(false);
                     var credential = JsonSerializer.Deserialize<StoredCredential>(content, _jsonOptions);
                     if (credential is not null &&
                         credential.AccountId.Equals(accountId, StringComparison.OrdinalIgnoreCase))
@@ -314,7 +315,7 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
         }
 
         /// <inheritdoc />
-        public async Task<IEnumerable<string>> GetProviderNamesAsync()
+        public async Task<IEnumerable<string>> GetProviderNamesAsync(CancellationToken cancellationToken = default)
         {
             var credentialFiles = Directory.GetFiles(_credentialsDirectory, "*.json")
                 .Where(f => !f.Equals(_selectionFile, StringComparison.OrdinalIgnoreCase));
@@ -325,7 +326,7 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
             {
                 try
                 {
-                    var content = await File.ReadAllTextAsync(file).ConfigureAwait(false);
+                    var content = await File.ReadAllTextAsync(file, cancellationToken).ConfigureAwait(false);
                     var credential = JsonSerializer.Deserialize<StoredCredential>(content, _jsonOptions);
 
                     if (!string.IsNullOrWhiteSpace(credential?.ProviderName))
@@ -343,14 +344,14 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
         }
 
         /// <inheritdoc />
-        public async Task<IReadOnlyList<CredentialExport>> ExportCredentialsAsync()
+        public async Task<IReadOnlyList<CredentialExport>> ExportCredentialsAsync(CancellationToken cancellationToken = default)
         {
             // Every *.json in the directory except the selection record is a
             // stored credential; mirrors the glob GetProviderNamesAsync uses.
             var credentialFiles = Directory.GetFiles(_credentialsDirectory, "*.json")
                 .Where(f => !f.Equals(_selectionFile, StringComparison.OrdinalIgnoreCase));
 
-            var selections = await LoadSelectionsAsync().ConfigureAwait(false);
+            var selections = await LoadSelectionsAsync(cancellationToken).ConfigureAwait(false);
             var exports = new List<CredentialExport>();
 
             foreach (var file in credentialFiles)
@@ -358,7 +359,7 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
                 StoredCredential? credential;
                 try
                 {
-                    var content = await File.ReadAllTextAsync(file).ConfigureAwait(false);
+                    var content = await File.ReadAllTextAsync(file, cancellationToken).ConfigureAwait(false);
                     credential = JsonSerializer.Deserialize<StoredCredential>(content, _jsonOptions);
                 }
                 catch (JsonException)
@@ -409,7 +410,7 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
         }
 
         /// <inheritdoc />
-        public async Task RestoreCredentialAsync(CredentialExport credential)
+        public async Task RestoreCredentialAsync(CredentialExport credential, CancellationToken cancellationToken = default)
         {
             ArgumentNullException.ThrowIfNull(credential);
 
@@ -441,14 +442,15 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
             await AtomicFile.WriteAllTextAsync(
                 filePath,
                 json,
-                OperatingSystem.IsWindows() ? null : UnixFileMode.UserRead | UnixFileMode.UserWrite).ConfigureAwait(false);
+                OperatingSystem.IsWindows() ? null : UnixFileMode.UserRead | UnixFileMode.UserWrite,
+                cancellationToken).ConfigureAwait(false);
 
             if (credential.IsSelected)
             {
-                using var selectionsLock = await SelectionsLock.AcquireAsync(_selectionLockFile).ConfigureAwait(false);
-                var selections = await LoadSelectionsAsync().ConfigureAwait(false);
+                using var selectionsLock = await SelectionsLock.AcquireAsync(_selectionLockFile, cancellationToken).ConfigureAwait(false);
+                var selections = await LoadSelectionsAsync(cancellationToken).ConfigureAwait(false);
                 selections[credential.ProviderName] = credential.AccountId;
-                await SaveSelectionsAsync(selections).ConfigureAwait(false);
+                await SaveSelectionsAsync(selections, cancellationToken).ConfigureAwait(false);
             }
         }
 
@@ -509,7 +511,7 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
         /// selected. A green tick in `accounts list` alongside "no credential selected"
         /// from the consumer's authenticate call (#48).
         /// </remarks>
-        private async Task<Dictionary<string, string>> LoadSelectionsAsync()
+        private async Task<Dictionary<string, string>> LoadSelectionsAsync(CancellationToken cancellationToken)
         {
             if (!File.Exists(_selectionFile))
             {
@@ -519,7 +521,7 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
             Dictionary<string, string>? loaded;
             try
             {
-                var content = await File.ReadAllTextAsync(_selectionFile).ConfigureAwait(false);
+                var content = await File.ReadAllTextAsync(_selectionFile, cancellationToken).ConfigureAwait(false);
                 loaded = JsonSerializer.Deserialize<Dictionary<string, string>>(content, _jsonOptions);
             }
             catch (JsonException)
@@ -544,7 +546,7 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
             return selections;
         }
 
-        private async Task SaveSelectionsAsync(Dictionary<string, string> selections)
+        private async Task SaveSelectionsAsync(Dictionary<string, string> selections, CancellationToken cancellationToken)
         {
             var json = JsonSerializer.Serialize(selections, _jsonOptions);
 
@@ -555,7 +557,8 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
             await AtomicFile.WriteAllTextAsync(
                 _selectionFile,
                 json,
-                OperatingSystem.IsWindows() ? null : UnixFileMode.UserRead | UnixFileMode.UserWrite).ConfigureAwait(false);
+                OperatingSystem.IsWindows() ? null : UnixFileMode.UserRead | UnixFileMode.UserWrite,
+                cancellationToken).ConfigureAwait(false);
         }
 
         private sealed class StoredCredential

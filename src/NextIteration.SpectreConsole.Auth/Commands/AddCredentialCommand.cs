@@ -83,14 +83,14 @@ namespace NextIteration.SpectreConsole.Auth.Commands
                     collector.ProviderName,
                     settings.AccountName,
                     environment,
-                    credentialData).ConfigureAwait(false);
+                    credentialData, cancellationToken).ConfigureAwait(false);
 
                 AnsiConsole.MarkupLine($"[green]Successfully added credential with ID: {accountId}[/]");
 
                 // Ask if user wants to select this credential as active
                 if (await AnsiConsole.ConfirmAsync("Do you want to set this as the active credential for this environment?", cancellationToken: cancellationToken).ConfigureAwait(false))
                 {
-                    _ = await _credentialManager.SelectCredentialAsync(accountId).ConfigureAwait(false);
+                    _ = await _credentialManager.SelectCredentialAsync(accountId, cancellationToken).ConfigureAwait(false);
                     AnsiConsole.MarkupLine("[green]Credential selected as active.[/]");
                 }
 

@@ -40,7 +40,7 @@ namespace NextIteration.SpectreConsole.Auth.Commands
             {
                 if (string.IsNullOrWhiteSpace(settings.Provider))
                 {
-                    var providers = await _credentialManager.GetProviderNamesAsync().ConfigureAwait(false);
+                    var providers = await _credentialManager.GetProviderNamesAsync(cancellationToken).ConfigureAwait(false);
 
                     if (!providers.Any())
                     {
@@ -50,13 +50,13 @@ namespace NextIteration.SpectreConsole.Auth.Commands
 
                     foreach (var provider in providers)
                     {
-                        await DisplayCredentialsForProvider(provider).ConfigureAwait(false);
+                        await DisplayCredentialsForProvider(provider, cancellationToken).ConfigureAwait(false);
                         AnsiConsole.WriteLine();
                     }
                 }
                 else
                 {
-                    await DisplayCredentialsForProvider(settings.Provider).ConfigureAwait(false);
+                    await DisplayCredentialsForProvider(settings.Provider, cancellationToken).ConfigureAwait(false);
                 }
 
                 return 0;
@@ -69,9 +69,9 @@ namespace NextIteration.SpectreConsole.Auth.Commands
         }
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Globalization", "CA1305:Specify IFormatProvider", Justification = "<Pending>")]
-        private async Task DisplayCredentialsForProvider(string provider)
+        private async Task DisplayCredentialsForProvider(string provider, CancellationToken cancellationToken)
         {
-            var credentials = (await _credentialManager.ListCredentialsAsync(provider).ConfigureAwait(false)).ToList();
+            var credentials = (await _credentialManager.ListCredentialsAsync(provider, cancellationToken).ConfigureAwait(false)).ToList();
 
             if (credentials.Count == 0)
             {

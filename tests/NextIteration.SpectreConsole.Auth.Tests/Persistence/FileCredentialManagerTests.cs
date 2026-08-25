@@ -837,6 +837,28 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
             Assert.False(listed.Single(c => c.AccountId == prod).IsSelected);
         }
 
+        [Fact]
+        public async Task Operations_HonourAnAlreadyCancelledToken()
+        {
+            using var temp = new TempDir();
+            var manager = CreateManager(temp.Path);
+            var id = await manager.AddCredentialAsync("Adobe", "prod", "Production", "{}");
+
+            using var cts = new CancellationTokenSource();
+            await cts.CancelAsync();
+
+            // Every member takes a token as of 2.0.0 (#74); a cancelled one must surface as
+            // cancellation rather than being silently ignored.
+            _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(
+                () => manager.ListCredentialsAsync("Adobe", cts.Token));
+            _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(
+                () => manager.GetCredentialByIdAsync("Adobe", id, cts.Token));
+            _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(
+                () => manager.ExportCredentialsAsync(cts.Token));
+            _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(
+                () => manager.AddCredentialAsync("Adobe", "x", "Production", "{}", cts.Token));
+        }
+
         /// <summary>
         /// Minimal summary provider used only to verify that
         /// <see cref="FileCredentialManager.ListCredentialsAsync"/> routes

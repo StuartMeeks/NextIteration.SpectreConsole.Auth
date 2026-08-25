@@ -47,7 +47,7 @@ namespace NextIteration.SpectreConsole.Auth.Commands
                 var resolver = BuildConflictResolver(settings.OnConflict, forcedResolution);
 
                 var service = new CredentialPortabilityService(_credentialManager);
-                var result = await service.ImportAsync(bundle, passphrase, resolver).ConfigureAwait(false);
+                var result = await service.ImportAsync(bundle, passphrase, resolver, cancellationToken).ConfigureAwait(false);
 
                 AnsiConsole.MarkupLine(
                     $"[green]Import complete:[/] {result.Added} added, {result.Overwritten} overwritten, {result.Skipped} skipped.");

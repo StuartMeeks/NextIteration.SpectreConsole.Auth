@@ -9,6 +9,19 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
     /// </summary>
     /// <remarks>
     /// <para>
+    /// <b>Every member accepts a <see cref="CancellationToken"/>.</b> Implementations backed
+    /// by an OS secret store must honour it: the Secret Service contract permits an
+    /// implementation to prompt (to unlock a collection, say) before serving a request, and a
+    /// synchronous call that cannot be cancelled then blocks with no way out (#74).
+    /// </para>
+    /// <para>
+    /// Honouring the token is not a guarantee that every block is escapable. The libsecret
+    /// backend wires the token to a <c>GCancellable</c>, which libsecret observes for its own
+    /// D-Bus work — but a Secret Service implementation that breaks libsecret's prompt
+    /// machinery can still wedge it beyond the reach of cancellation. See the remarks on
+    /// <c>LibsecretCredentialManager</c> for a case where exactly that happens.
+    /// </para>
+    /// <para>
     /// <b>Provider names are matched case-insensitively</b> and stored as supplied.
     /// A credential added as <c>Adobe</c> is found by a lookup for <c>adobe</c>, and
     /// the spelling the caller used is what <see cref="CredentialSummary.ProviderName"/>
@@ -32,7 +45,8 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
         /// Lists all stored credentials for a specific provider.
         /// </summary>
         /// <param name="providerName">The provider (e.g. <c>Adobe</c>).</param>
-        Task<IEnumerable<CredentialSummary>> ListCredentialsAsync(string providerName);
+        /// <param name="cancellationToken">Cancels the operation; see the interface remarks.</param>
+        Task<IEnumerable<CredentialSummary>> ListCredentialsAsync(string providerName, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Stores a new credential and returns its generated account ID.
@@ -42,28 +56,29 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
         /// <param name="environment">Environment the credential targets (e.g. <c>Production</c>).</param>
         /// <param name="credentialData">Plaintext JSON payload to encrypt and persist.</param>
         /// <returns>The account ID assigned to the new credential (a GUID).</returns>
-        Task<string> AddCredentialAsync(string providerName, string accountName, string environment, string credentialData);
+        /// <param name="cancellationToken">Cancels the operation; see the interface remarks.</param>
+        Task<string> AddCredentialAsync(string providerName, string accountName, string environment, string credentialData, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Deletes a credential by its account ID, and clears any selection
         /// that pointed to it.
         /// </summary>
         /// <returns><see langword="true"/> if the credential existed and was deleted.</returns>
-        Task<bool> DeleteCredentialAsync(string accountId);
+        Task<bool> DeleteCredentialAsync(string accountId, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Marks the credential as the active one for its provider. Exactly
         /// one credential per provider may be selected at a time.
         /// </summary>
         /// <returns><see langword="true"/> if the credential was found and selected.</returns>
-        Task<bool> SelectCredentialAsync(string accountId);
+        Task<bool> SelectCredentialAsync(string accountId, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Returns the decrypted JSON payload of the currently selected
         /// credential for <paramref name="providerName"/>, or
         /// <see langword="null"/> if no credential is selected.
         /// </summary>
-        Task<string?> GetSelectedCredentialAsync(string providerName);
+        Task<string?> GetSelectedCredentialAsync(string providerName, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Returns the decrypted JSON payload of a specific credential by
@@ -79,13 +94,14 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
         /// The decrypted JSON payload, or <see langword="null"/> if no
         /// credential with that account id exists for the given provider.
         /// </returns>
-        Task<string?> GetCredentialByIdAsync(string providerName, string accountId);
+        /// <param name="cancellationToken">Cancels the operation; see the interface remarks.</param>
+        Task<string?> GetCredentialByIdAsync(string providerName, string accountId, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Returns the set of provider names that currently have at least
         /// one stored credential.
         /// </summary>
-        Task<IEnumerable<string>> GetProviderNamesAsync();
+        Task<IEnumerable<string>> GetProviderNamesAsync(CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Enumerates the stored credentials across all providers whose payload can
@@ -117,7 +133,7 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
         /// <see cref="ListCredentialsAsync"/>, which reads metadata only.
         /// </para>
         /// </remarks>
-        Task<IReadOnlyList<CredentialExport>> ExportCredentialsAsync();
+        Task<IReadOnlyList<CredentialExport>> ExportCredentialsAsync(CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Recreates a credential from an export record, preserving its
@@ -139,7 +155,8 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
         /// restored item's <see cref="CredentialExport.CreatedAt"/> is not
         /// preserved there.
         /// </remarks>
-        Task RestoreCredentialAsync(CredentialExport credential);
+        /// <param name="cancellationToken">Cancels the operation; see the interface remarks.</param>
+        Task RestoreCredentialAsync(CredentialExport credential, CancellationToken cancellationToken = default);
     }
 
     /// <summary>

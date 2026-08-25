@@ -9,6 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking
+
+- **`ICredentialManager` members now take a `CancellationToken`** (#74). Every member gains a
+  trailing `CancellationToken cancellationToken = default`. Existing *callers* keep compiling —
+  the parameter is optional — but any external **implementation** of the interface must update
+  its signatures. The three built-in backends are updated. `ICredentialCollector` and
+  `ICredentialSummaryProvider` are untouched, so the provider packages are unaffected.
+
+  The libsecret backend now binds the token to a `GCancellable` for every call, so
+  cancellation reaches libsecret rather than stopping at the managed boundary. The Keychain
+  backend honours the token at entry; Security.framework's `SecItem*` API offers no
+  mid-call cancellation, and that is documented rather than faked.
+
+  **What this does not fix, verified rather than assumed:** it does not rescue the KWallet
+  wedge that prompted the issue. Against `ksecretd` the cancellation callback does fire, but
+  the call still never returns, because ksecretd emits the prompt's `Completed` signal with an
+  `ao` payload where libsecret expects `o` — libsecret's `secret_service_real_prompt_async`
+  GTask is then *"finalized without ever returning"* and its nested main loop never exits.
+  That is an upstream libsecret/KWallet incompatibility, and it is recorded in the backend's
+  remarks instead of being papered over.
+
+  This makes the next release **2.0.0**; the version bump itself is a separate release PR.
+
 ### Changed
 
 - **The libsecret backend is now documented as GNOME Keyring only** (#19). It was described
