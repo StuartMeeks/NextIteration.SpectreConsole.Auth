@@ -128,5 +128,54 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
             var files = Directory.GetFiles(temp.Path);
             Assert.Single(files);
         }
+
+        [Fact]
+        public async Task WriteAllTextAsync_TempFileIsNeverWorldReadable_WhileBeingWritten()
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                return; // Unix permissions only; Windows inherits the directory ACL.
+            }
+
+            using var temp = new TempDir();
+            var target = Path.Join(temp.Path, "export.bundle");
+
+            // A large payload makes the write window wide enough to observe. Before the fix
+            // the file was created at the umask default and chmod'd only after the whole
+            // payload had landed, so every secret sat readable at the temp path meanwhile
+            // (#54) -- which matters because `accounts export` writes to a user-chosen path
+            // that may not be inside the 0700 credentials directory.
+            var payload = new string('x', 4 * 1024 * 1024);
+
+            var write = AtomicFile.WriteAllTextAsync(
+                target, payload, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+
+            var offending = new List<string>();
+            while (!write.IsCompleted)
+            {
+                foreach (var f in Directory.GetFiles(temp.Path, "*.tmp"))
+                {
+                    try
+                    {
+                        var mode = File.GetUnixFileMode(f);
+                        if ((mode & (UnixFileMode.GroupRead | UnixFileMode.OtherRead)) != 0)
+                        {
+                            offending.Add($"{Path.GetFileName(f)} = {mode}");
+                        }
+                    }
+                    catch (FileNotFoundException)
+                    {
+                        // Renamed out from under us; that is the success path.
+                    }
+                }
+            }
+
+            await write;
+
+            Assert.Empty(offending);
+            Assert.Equal(
+                UnixFileMode.UserRead | UnixFileMode.UserWrite,
+                File.GetUnixFileMode(target));
+        }
     }
 }

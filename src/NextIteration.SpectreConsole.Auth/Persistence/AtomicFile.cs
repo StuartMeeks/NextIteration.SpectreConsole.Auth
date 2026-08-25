@@ -33,14 +33,45 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
             var tempPath = BuildTempPath(path);
             try
             {
-                await File.WriteAllTextAsync(tempPath, contents).ConfigureAwait(false);
-                ApplyUnixModeIfRequested(tempPath, unixMode);
+                await WriteTempAsync(tempPath, System.Text.Encoding.UTF8.GetBytes(contents), unixMode).ConfigureAwait(false);
                 await ReplaceAtomicallyAsync(tempPath, path).ConfigureAwait(false);
             }
             catch
             {
                 TryDelete(tempPath);
                 throw;
+            }
+        }
+
+        /// <summary>
+        /// Writes the temp file with its final permissions already in place.
+        /// </summary>
+        /// <remarks>
+        /// The mode is applied by <see cref="FileStreamOptions.UnixCreateMode"/> at creation
+        /// rather than chmod'd afterwards. Writing first and fixing permissions second left
+        /// the whole payload readable at the umask default for the duration of the write.
+        /// Inside the credentials directory that is shielded by its own <c>0700</c>, but
+        /// <c>accounts export</c> writes to a path the user chooses — exporting to <c>/tmp</c>
+        /// or any shared directory exposed every secret in the store for that window (#54).
+        /// </remarks>
+        private static async Task WriteTempAsync(string tempPath, byte[] bytes, UnixFileMode? unixMode)
+        {
+            var options = new FileStreamOptions
+            {
+                Mode = FileMode.CreateNew,
+                Access = FileAccess.Write,
+                Share = FileShare.None,
+            };
+
+            if (unixMode is not null && !OperatingSystem.IsWindows())
+            {
+                options.UnixCreateMode = unixMode.Value;
+            }
+
+            var stream = new FileStream(tempPath, options);
+            await using (stream.ConfigureAwait(false))
+            {
+                await stream.WriteAsync(bytes).ConfigureAwait(false);
             }
         }
 
@@ -71,8 +102,7 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
             var tempPath = BuildTempPath(path);
             try
             {
-                await File.WriteAllBytesAsync(tempPath, bytes).ConfigureAwait(false);
-                ApplyUnixModeIfRequested(tempPath, unixMode);
+                await WriteTempAsync(tempPath, bytes, unixMode).ConfigureAwait(false);
 
                 // Deliberately not overwrite:true. A racing creator that already landed
                 // its keystore must win; we then fall back to reading theirs.
@@ -97,8 +127,7 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
             var tempPath = BuildTempPath(path);
             try
             {
-                await File.WriteAllBytesAsync(tempPath, bytes).ConfigureAwait(false);
-                ApplyUnixModeIfRequested(tempPath, unixMode);
+                await WriteTempAsync(tempPath, bytes, unixMode).ConfigureAwait(false);
                 await ReplaceAtomicallyAsync(tempPath, path).ConfigureAwait(false);
             }
             catch
@@ -156,16 +185,6 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
         // Unique per call to avoid collisions between concurrent writers, who
         // would otherwise both want the same `{path}.tmp` name.
         private static string BuildTempPath(string finalPath) => $"{finalPath}.{Guid.NewGuid():N}.tmp";
-
-        private static void ApplyUnixModeIfRequested(string path, UnixFileMode? unixMode)
-        {
-            if (unixMode is null || OperatingSystem.IsWindows())
-            {
-                return;
-            }
-
-            File.SetUnixFileMode(path, unixMode.Value);
-        }
 
         private static void TryDelete(string path)
         {
