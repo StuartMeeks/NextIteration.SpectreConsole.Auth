@@ -1,3 +1,7 @@
+using System.Runtime.Versioning;
+using System.Security.AccessControl;
+using System.Security.Principal;
+
 using NextIteration.SpectreConsole.Auth.Persistence;
 using NextIteration.SpectreConsole.Auth.Tests.Infrastructure;
 
@@ -55,7 +59,10 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
         {
             if (OperatingSystem.IsWindows())
             {
-                return; // Unix-only: Windows uses ACLs, verified via the file-perm integration path.
+                // Early return rather than Assert.SkipWhen: the analyzer uses this branch to
+                // narrow the platform for the File.GetUnixFileMode calls below (CA1416).
+                // The Windows ACL equivalent is Ensure_SetsHardenedAcl_OnFirstCreation.
+                return;
             }
 
             using var temp = new TempDir();
@@ -93,6 +100,53 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
 
             // Should respect consumer-chosen perms on an existing directory.
             Assert.Equal(originalMode, File.GetUnixFileMode(target));
+        }
+
+        [Fact]
+        [SupportedOSPlatform("windows")]
+        public void Ensure_SetsHardenedAcl_OnFirstCreation()
+        {
+            Assert.SkipWhen(!OperatingSystem.IsWindows(), "Windows ACLs; Unix uses mode bits, covered above.");
+
+            using var temp = new TempDir();
+            var target = Path.Join(temp.Path, "creds");
+
+            CredentialsDirectory.Ensure(target);
+
+            // Nothing asserted this before. The comment on the Unix test claimed the ACL was
+            // "verified via the file-perm integration path", and no such path existed
+            // anywhere in the suite (#47) -- so a regression here (wrong SID, inheritance
+            // left on, an ACE dropped) shipped green on all three platforms, while ACL
+            // hardening is one of the two reasons CLAUDE.md keeps the Windows CI leg.
+            var security = new DirectoryInfo(target).GetAccessControl();
+
+            Assert.True(
+                security.AreAccessRulesProtected,
+                "inheritance must be disabled, or %USERPROFILE% ACEs still grant access here");
+
+            var rules = security.GetAccessRules(
+                includeExplicit: true, includeInherited: true, typeof(SecurityIdentifier));
+
+            var sids = rules.Cast<FileSystemAccessRule>()
+                .Select(r => ((SecurityIdentifier)r.IdentityReference).Value)
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+
+            var currentUser = WindowsIdentity.GetCurrent().User!.Value;
+            var system = new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null).Value;
+
+            // Exactly the current user and SYSTEM -- no Administrators, no Users, nothing
+            // inherited. Asserting the whole set, not just that ours is present, is what
+            // catches an extra ACE being granted.
+            string[] expected = [.. new[] { currentUser, system }.OrderBy(x => x, StringComparer.Ordinal)];
+            string[] actual = [.. sids.OrderBy(x => x, StringComparer.Ordinal)];
+            Assert.Equal(expected, actual);
+
+            foreach (FileSystemAccessRule rule in rules)
+            {
+                Assert.Equal(AccessControlType.Allow, rule.AccessControlType);
+                Assert.Equal(FileSystemRights.FullControl, rule.FileSystemRights);
+            }
         }
     }
 }

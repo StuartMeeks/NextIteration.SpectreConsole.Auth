@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The Windows ACL hardening was verified by no test, behind a comment claiming it was**
+  (#47). `CredentialsDirectoryTests` skipped its Windows case with *"verified via the file-perm
+  integration path"*, and no such path existed anywhere in the suite — grepping for
+  `GetAccessControl`, `FileSystemAccessRule` and `DirectorySecurity` returned nothing. So a
+  regression in `CredentialsDirectory.CreateWithWindowsAcl` — wrong SID, inheritance left
+  enabled, an ACE dropped — would have shipped green on all three platforms, while ACL
+  hardening is one of the two reasons `CLAUDE.md` gives for keeping the Windows CI leg at all.
+  There is now a test asserting inheritance is disabled and that the rule set is *exactly* the
+  current user and SYSTEM, each with `FullControl` and `Allow`. Asserting the whole set rather
+  than the presence of one rule is what catches an extra grant.
+
 - **Replacing an existing selection was never tested on any backend** (#51). Every
   `SelectCredentialAsync` call in the suite was either a first selection or a negative case,
   and the only multi-select test used *different* providers — so `KeychainCredentialManager`'s
