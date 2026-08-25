@@ -753,6 +753,46 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
                 throw new System.Text.Json.JsonException("provider cannot parse this payload shape");
         }
 
+        [Theory]
+        [InlineData("Adobe")]
+        [InlineData("adobe")]
+        [InlineData("ADOBE")]
+        public async Task GetSelectedCredentialAsync_IsCaseInsensitive_LikeListCredentials(string spelling)
+        {
+            using var temp = new TempDir();
+            var manager = CreateManager(temp.Path);
+
+            // Stored under the canonical spelling.
+            var id = await manager.AddCredentialAsync("Adobe", "prod", "Production", "{\"k\":\"v\"}");
+            Assert.True(await manager.SelectCredentialAsync(id));
+
+            // ListCredentialsAsync has always matched case-insensitively; the selection
+            // lookup did not, so it returned null for exactly the credential the listing
+            // was reporting as selected (#48).
+            var listed = Assert.Single(await manager.ListCredentialsAsync(spelling));
+            Assert.True(listed.IsSelected);
+            Assert.Equal("{\"k\":\"v\"}", await manager.GetSelectedCredentialAsync(spelling));
+        }
+
+        [Fact]
+        public async Task LoadSelections_ToleratesCaseDuplicatesInAHandEditedFile()
+        {
+            using var temp = new TempDir();
+            var manager = CreateManager(temp.Path);
+            var id = await manager.AddCredentialAsync("Adobe", "prod", "Production", "{}");
+            Assert.True(await manager.SelectCredentialAsync(id));
+
+            // A case-insensitive dictionary throws on duplicate keys, so a hand-edited
+            // file holding both spellings must not take the store down.
+            var selectionFile = Path.Join(temp.Path, "selections.json");
+            await File.WriteAllTextAsync(
+                selectionFile,
+                $"{{\"Adobe\":\"{id}\",\"adobe\":\"{id}\"}}",
+                TestContext.Current.CancellationToken);
+
+            Assert.Equal("{}", await manager.GetSelectedCredentialAsync("Adobe"));
+        }
+
         /// <summary>
         /// Minimal summary provider used only to verify that
         /// <see cref="FileCredentialManager.ListCredentialsAsync"/> routes

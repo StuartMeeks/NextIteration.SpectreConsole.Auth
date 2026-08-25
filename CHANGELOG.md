@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`accounts list` could show a credential as selected that the consumer could not resolve**
+  (#48). `selections.json` deserialised into a default ordinal dictionary, so
+  `GetSelectedCredentialAsync` missed a selection recorded under a differently-cased provider
+  spelling — while `ListCredentialsAsync`, which matches `OrdinalIgnoreCase`, still reported
+  that same credential as selected. The result was a green tick in the listing next to
+  "No credential selected" from the consumer's `AuthenticateAsync()`. The selection map is now
+  keyed `OrdinalIgnoreCase`, matching every other provider comparison in the class, and a
+  hand-edited file holding two spellings of one provider is tolerated rather than throwing.
+
 - **A summary provider that threw made the whole credential vanish from `accounts list`**
   (#52). The per-file `catch (JsonException)` in `FileCredentialManager.ListCredentialsAsync`
   spanned the entire loop body, including the consumer's `GetDisplayFields` call. Since the

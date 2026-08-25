@@ -496,23 +496,52 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
 
         private void EnsureDirectoryExists() => CredentialsDirectory.Ensure(_credentialsDirectory);
 
+        /// <summary>
+        /// Loads the provider-to-account-id selection map, keyed case-insensitively.
+        /// </summary>
+        /// <remarks>
+        /// The comparer is load-bearing. Every other provider-name comparison in this
+        /// class is <see cref="StringComparison.OrdinalIgnoreCase"/> and the file glob is
+        /// lowercased, but the selection map deserialised into a default (ordinal)
+        /// dictionary — so <see cref="GetSelectedCredentialAsync"/> missed a selection
+        /// stored under a differently-cased spelling while
+        /// <see cref="ListCredentialsAsync"/> still reported that same credential as
+        /// selected. A green tick in `accounts list` alongside "no credential selected"
+        /// from the consumer's authenticate call (#48).
+        /// </remarks>
         private async Task<Dictionary<string, string>> LoadSelectionsAsync()
         {
             if (!File.Exists(_selectionFile))
             {
-                return [];
+                return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             }
 
+            Dictionary<string, string>? loaded;
             try
             {
                 var content = await File.ReadAllTextAsync(_selectionFile).ConfigureAwait(false);
-                return JsonSerializer.Deserialize<Dictionary<string, string>>(content, _jsonOptions) ??
-                       [];
+                loaded = JsonSerializer.Deserialize<Dictionary<string, string>>(content, _jsonOptions);
             }
             catch (JsonException)
             {
-                return [];
+                loaded = null;
             }
+
+            var selections = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (loaded is null)
+            {
+                return selections;
+            }
+
+            foreach (var (provider, accountId) in loaded)
+            {
+                // TryAdd rather than the indexer: a hand-edited selections.json can hold
+                // two keys differing only by case, which would throw on a case-insensitive
+                // dictionary. First wins, matching the file-enumeration order elsewhere.
+                _ = selections.TryAdd(provider, accountId);
+            }
+
+            return selections;
         }
 
         private async Task SaveSelectionsAsync(Dictionary<string, string> selections)
