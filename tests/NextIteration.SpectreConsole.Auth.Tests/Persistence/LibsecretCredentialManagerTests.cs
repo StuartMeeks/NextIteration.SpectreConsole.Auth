@@ -534,6 +534,26 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
             Assert.Equal("{\"k\":\"v\"}", await manager.GetCredentialByIdAsync(spelling, id));
         }
 
+        [Fact]
+        [SupportedOSPlatform("linux")]
+        public async Task DeleteCredentialAsync_ReportsTrueOnlyWhenTheItemIsActuallyGone()
+        {
+            Assert.SkipWhen(_skip, SkipReason);
+
+            var manager = NewManager();
+            var id = await manager.AddCredentialAsync("Adobe", "prod", "Production", "{\"k\":\"v\"}");
+
+            // A successful delete must both report true and leave nothing behind. The
+            // gboolean from secret_password_clearv_sync used to be discarded, so this
+            // returned true unconditionally (#45); threading it through is what these
+            // assertions now pin.
+            Assert.True(await RetryHelper.UntilTrueAsync(() => manager.DeleteCredentialAsync(id)));
+            Assert.Empty(await RetryHelper.UntilAsync(() => manager.ListCredentialsAsync("Adobe"), r => !r.Any()));
+
+            // Deleting it again must report false, not a second success.
+            Assert.False(await manager.DeleteCredentialAsync(id));
+        }
+
         private sealed class FakeAdobeSummaryProvider : ICredentialSummaryProvider
         {
             public string ProviderName => "Adobe";
