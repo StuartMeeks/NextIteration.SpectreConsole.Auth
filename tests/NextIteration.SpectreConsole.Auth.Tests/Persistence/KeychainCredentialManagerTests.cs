@@ -115,7 +115,14 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
             Assert.True(await RetryHelper.UntilTrueAsync(() => manager.DeleteCredentialAsync(id)));
             await manager.RestoreCredentialAsync(exported);
 
-            var restored = Assert.Single(await RetryHelper.UntilAsync(() => manager.ExportCredentialsAsync(), r => r.Count == 1));
+            // Retry on the property actually being asserted, not just the count. The
+            // selection is a separate store item written moments earlier by
+            // RestoreCredentialAsync, so the credential can become visible before the
+            // selection does — and the count-only predicate let the assertions run against
+            // a half-visible store, which is what flaked on the macOS runner (#61).
+            var restored = Assert.Single(await RetryHelper.UntilAsync(
+                () => manager.ExportCredentialsAsync(),
+                r => r.Count == 1 && r[0].IsSelected));
             Assert.Equal(id, restored.AccountId);
             Assert.True(restored.IsSelected);
             Assert.Equal("{\"apiKey\":\"secret\"}", await manager.GetSelectedCredentialAsync("Adobe"));
