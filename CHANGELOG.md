@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The libsecret backend reported a successful delete when nothing was deleted** (#45).
+  `ClearItem` discarded the gboolean from `secret_password_clearv_sync` and
+  `DeleteCredentialAsync` returned `true` unconditionally, so `accounts delete` printed
+  "Credential deleted successfully." and exited 0 for a credential still in the keyring —
+  the worst possible answer for someone revoking a leaked secret. `clearv` removes only
+  *unlocked* matches and reports "nothing removed" by returning FALSE **without** setting a
+  GError, so nothing else caught it. The result is now threaded through and a delete that
+  removed nothing returns `false`, leaving the selection untouched because the credential it
+  points at still exists. The Keychain backend already checked its status and is unchanged.
+
 - **Provider-name casing behaved differently on each of the three backends** (#49).
   `ICredentialManager` documented no case-sensitivity contract, and the implementations
   disagreed: the file backend matched `OrdinalIgnoreCase`, while the Keychain and libsecret

@@ -190,12 +190,23 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Libsecret
                 return Task.FromResult(false);
             }
 
-            ClearItem(new Dictionary<string, string>(StringComparer.Ordinal)
+            var removed = ClearItem(new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 [AttrApp] = _appIdentifier,
                 [AttrKind] = KindCredential,
                 [AttrAccount] = accountId,
             });
+
+            if (!removed)
+            {
+                // The search found the item but the clear removed nothing — the collection
+                // is locked, or it disappeared between the two calls. Reporting success
+                // here told a user revoking a leaked credential that it was gone while it
+                // was still readable by anything that can unlock the keyring. The selection
+                // is deliberately left alone too: it still points at a credential that
+                // exists.
+                return Task.FromResult(false);
+            }
 
             var providerName = match.Attributes.GetValueOrDefault(AttrProvider);
             if (providerName is not null)
@@ -432,7 +443,10 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Libsecret
 
         private void ClearSelection(string providerName)
         {
-            ClearItem(new Dictionary<string, string>(StringComparer.Ordinal)
+            // Discard deliberately: clearing a selection that was never recorded is a
+            // no-op, not a failure. Only DeleteCredentialAsync needs the result, because
+            // there "nothing removed" means the credential is still stored.
+            _ = ClearItem(new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 [AttrApp] = _appIdentifier,
                 [AttrKind] = KindSelection,
@@ -579,13 +593,30 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Libsecret
             }
         }
 
-        private static void ClearItem(Dictionary<string, string> attributes)
+        /// <summary>
+        /// Removes every item matching <paramref name="attributes"/> and reports whether
+        /// anything was actually removed.
+        /// </summary>
+        /// <returns>
+        /// <see langword="true"/> when at least one item was removed.
+        /// </returns>
+        /// <remarks>
+        /// The return value is load-bearing and must not be discarded again.
+        /// <c>secret_password_clearv_sync</c> removes only <b>unlocked</b> matches and
+        /// reports "nothing removed" by returning FALSE <em>without</em> setting a GError,
+        /// so <see cref="ThrowIfGError"/> does not fire. Throwing the result away made
+        /// <see cref="DeleteCredentialAsync"/> report success for a credential that is
+        /// still in the keyring — a user revoking a leaked secret was told it was gone
+        /// (#45).
+        /// </remarks>
+        private static bool ClearItem(Dictionary<string, string> attributes)
         {
             var attrs = NewAttributes(attributes);
             try
             {
-                _ = secret_password_clearv_sync(IntPtr.Zero, attrs, IntPtr.Zero, out var error);
+                var removed = secret_password_clearv_sync(IntPtr.Zero, attrs, IntPtr.Zero, out var error);
                 ThrowIfGError(error, "secret_password_clearv_sync");
+                return removed != 0;
             }
             finally
             {
