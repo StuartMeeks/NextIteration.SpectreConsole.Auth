@@ -71,6 +71,7 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Keychain
                 Label = accountName,
                 Description = environment,
                 Data = Encoding.UTF8.GetBytes(credentialData),
+                OwnerAppIdentifier = _appIdentifier,
             };
 
             AddItem(attrs);
@@ -91,7 +92,7 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Keychain
         /// Best-effort: returns after a bounded wait even if the item never
         /// appears, leaving any genuine failure to the caller's own lookup.
         /// </summary>
-        private static void ConfirmItemVisible(string service, string account)
+        private void ConfirmItemVisible(string service, string account)
         {
             const int maxAttempts = 20;
             for (var attempt = 1; attempt <= maxAttempts; attempt++)
@@ -344,6 +345,7 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Keychain
                 Label = credential.AccountName,
                 Description = credential.Environment,
                 Data = Encoding.UTF8.GetBytes(credential.CredentialData),
+                OwnerAppIdentifier = _appIdentifier,
             });
 
             if (credential.IsSelected)
@@ -391,6 +393,33 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Keychain
             return providerName;
         }
 
+        /// <summary>
+        /// Whether <paramref name="item"/> belongs to this manager's app.
+        /// </summary>
+        /// <remarks>
+        /// Items written by this version carry the owning app identifier in
+        /// <c>kSecAttrGeneric</c> and are matched on it exactly. Items written before that
+        /// attribute existed carry nothing, so they fall back to the old service-prefix
+        /// check — without which every previously stored credential would vanish.
+        /// <para>
+        /// The fallback is not a complete fix and is not presented as one: a legacy item
+        /// belonging to an app whose identifier is a dot-prefix of another's stays
+        /// ambiguous until it is rewritten. Everything written from now on is scoped
+        /// exactly (#55).
+        /// </para>
+        /// </remarks>
+        private bool IsOwnedByThisApp(KeychainItem item)
+        {
+            if (!string.IsNullOrEmpty(item.OwnerAppIdentifier))
+            {
+                return string.Equals(item.OwnerAppIdentifier, _appIdentifier, StringComparison.Ordinal);
+            }
+
+            // Legacy item: no owner recorded, so fall back to the ambiguous prefix test.
+            return item.Service.StartsWith(_appIdentifier + ".", StringComparison.Ordinal)
+                || string.Equals(item.Service, SelectionsService, StringComparison.Ordinal);
+        }
+
         private string ServiceFor(string providerName) => $"{_appIdentifier}.{providerName}";
 
         private string SelectionsService => $"{_appIdentifier}{SelectionsServiceSuffix}";
@@ -431,6 +460,7 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Keychain
                     Label = $"{_appIdentifier} active credential ({providerName})",
                     Description = string.Empty,
                     Data = bytes,
+                    OwnerAppIdentifier = _appIdentifier,
                 });
             }
             else
@@ -497,6 +527,12 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Keychain
             public string? Description { get; init; }
             public DateTime? CreatedAt { get; init; }
             public byte[]? Data { get; init; }
+
+            /// <summary>
+            /// Owning app identifier, stored in <c>kSecAttrComment</c>. Null for items
+            /// written before this attribute existed — see <see cref="IsOwnedByThisApp"/>.
+            /// </summary>
+            public string? OwnerAppIdentifier { get; init; }
         }
 
         private static void AddItem(KeychainItem item)
@@ -510,6 +546,13 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Keychain
                 var descCf = Track(handles, NewCfString(item.Description ?? string.Empty));
                 var dataCf = Track(handles, NewCfData(item.Data ?? []));
 
+                // kSecAttrComment records which app owns the item, so scoping does not have
+                // to be inferred from the service string. That inference was ambiguous:
+                // the service is "{app}.{provider}" and provider names may contain dots, so
+                // app "com.acme.cli" could not tell its own "pro.Adobe" item from app
+                // "com.acme.cli.pro"'s "Adobe" item (#55).
+                var ownerCf = Track(handles, NewCfString(item.OwnerAppIdentifier ?? string.Empty));
+
                 var pairs = new List<(IntPtr, IntPtr)>
                 {
                     (Constants.KSecClass, Constants.KSecClassGenericPassword),
@@ -517,6 +560,7 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Keychain
                     (Constants.KSecAttrAccount, accountCf),
                     (Constants.KSecAttrLabel, labelCf),
                     (Constants.KSecAttrDescription, descCf),
+                    (Constants.KSecAttrComment, ownerCf),
                     (Constants.KSecValueData, dataCf),
                 };
 
@@ -588,7 +632,12 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Keychain
             }
         }
 
-        private static KeychainItem? QuerySingleItem(string service, string account, bool includeData)
+        /// <summary>
+        /// Fetches one item by service + account, or null if it does not exist or is not
+        /// ours. See <see cref="IsOwnedByThisApp"/> — an exact service query is not on its
+        /// own proof of ownership, because the service string is ambiguous (#55).
+        /// </summary>
+        private KeychainItem? QuerySingleItem(string service, string account, bool includeData)
         {
             var handles = new List<IntPtr>();
             try
@@ -615,7 +664,11 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Keychain
 
                 try
                 {
-                    return DecodeItem(result);
+                    var decoded = DecodeItem(result);
+
+                    // Present but owned by another app: treat as not found rather than
+                    // handing back someone else's credential (#55).
+                    return decoded is not null && IsOwnedByThisApp(decoded) ? decoded : null;
                 }
                 finally
                 {
@@ -631,7 +684,7 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Keychain
             }
         }
 
-        private static List<KeychainItem> QueryItems(string service, bool includeData)
+        private List<KeychainItem> QueryItems(string service, bool includeData)
         {
             // Bulk query: request attributes only. Combining kSecReturnAttributes
             // + kSecReturnData + kSecMatchLimitAll in a single SecItemCopyMatching
@@ -661,7 +714,9 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Keychain
 
                 try
                 {
-                    stubs = DecodeArray(result);
+                    // The service string alone does not establish ownership, so filter even
+                    // though this query pinned an exact service (#55).
+                    stubs = [.. DecodeArray(result).Where(IsOwnedByThisApp)];
                 }
                 finally
                 {
@@ -732,9 +787,7 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Keychain
                 try
                 {
                     var items = DecodeArray(result);
-                    stubs = [.. items
-                        .Where(i => i.Service.StartsWith(_appIdentifier + ".", StringComparison.Ordinal)
-                            || string.Equals(i.Service, SelectionsService, StringComparison.Ordinal))];
+                    stubs = [.. items.Where(IsOwnedByThisApp)];
                 }
                 finally
                 {
@@ -832,6 +885,7 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Keychain
                 Description = ReadCfStringAt(dict, Constants.KSecAttrDescription),
                 CreatedAt = ReadCfDateAt(dict, Constants.KSecAttrCreationDate),
                 Data = ReadCfDataAt(dict, Constants.KSecValueData),
+                OwnerAppIdentifier = ReadCfStringAt(dict, Constants.KSecAttrComment),
             };
         }
 

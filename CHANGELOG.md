@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The Keychain backend could see another CLI's credentials** (#55). App scoping was a
+  dot-prefix match on the service string, and since the service is `{app}.{provider}` and
+  provider names may contain dots, app `com.acme.cli` could not distinguish its own
+  `pro.Adobe` item from app `com.acme.cli.pro`'s `Adobe` item. The neighbour could list,
+  export **and delete** credentials it did not own; reverse-DNS identifiers nest by
+  convention, so the collision is plausible rather than contrived. Items now record their
+  owning app in `kSecAttrComment` and every query filters on it exactly. Items written before
+  this release carry no owner and fall back to the old prefix test, so nothing already stored
+  becomes invisible — meaning **legacy items stay ambiguous until rewritten**, and only items
+  written from this release on are scoped exactly.
+
 - **`RestoreCredentialAsync_Preserves…` flaked on the OS-native backends** (#61). The test
   retried until one credential was visible and then asserted `IsSelected`, which comes from a
   *separate* store item written moments earlier — so the credential could become visible
