@@ -454,5 +454,47 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Encryption
                 Assert.Equal($"payload-{i}", results[i]);
             }
         }
+
+        [Fact]
+        public async Task ConcurrentFirstRun_BothWritersKeysSurvive()
+        {
+            using var temp = new TempDir();
+
+            // Two instances over one directory with no .keystore yet. There is no
+            // cross-process lock and no cross-instance lock either, so both take the
+            // create path and both derive a data key. Before the fix the second write
+            // replaced the first, and everything the first had already encrypted became
+            // permanently undecryptable (#44).
+            var a = new LocalFileCredentialEncryption(temp.Path);
+            var b = new LocalFileCredentialEncryption(temp.Path);
+
+            var encryptA = a.EncryptAsync("{\"secret\":\"WRITTEN-BY-A\"}");
+            var encryptB = b.EncryptAsync("{\"secret\":\"WRITTEN-BY-B\"}");
+            var cipherA = await encryptA;
+            var cipherB = await encryptB;
+
+            // A fresh instance is what the next CLI invocation gets: it reads whichever
+            // keystore is on disk. Both ciphertexts must open under it.
+            var reader = new LocalFileCredentialEncryption(temp.Path);
+            Assert.Equal("{\"secret\":\"WRITTEN-BY-A\"}", await reader.DecryptAsync(cipherA));
+            Assert.Equal("{\"secret\":\"WRITTEN-BY-B\"}", await reader.DecryptAsync(cipherB));
+        }
+
+        [Fact]
+        public async Task CreateKeyFile_DoesNotReplaceAnExistingKeystore()
+        {
+            using var temp = new TempDir();
+
+            var first = new LocalFileCredentialEncryption(temp.Path);
+            var cipher = await first.EncryptAsync("payload");
+
+            var keystore = Path.Join(temp.Path, ".keystore");
+            var bytesBefore = await File.ReadAllBytesAsync(keystore, TestContext.Current.CancellationToken);
+
+            // A second instance must adopt the existing keystore, never mint over it.
+            var second = new LocalFileCredentialEncryption(temp.Path);
+            Assert.Equal("payload", await second.DecryptAsync(cipher));
+            Assert.Equal(bytesBefore, await File.ReadAllBytesAsync(keystore, TestContext.Current.CancellationToken));
+        }
     }
 }

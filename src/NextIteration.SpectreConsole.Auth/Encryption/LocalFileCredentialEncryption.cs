@@ -224,6 +224,10 @@ namespace NextIteration.SpectreConsole.Auth.Encryption
         {
             if (!File.Exists(_keyFile))
             {
+                // Create-if-absent, and deliberately ignore whether we won: the read
+                // below is what decides which key is used, so a racer that lost simply
+                // adopts the winner's key instead of persisting data under a key that
+                // is no longer on disk.
                 await CreateKeyFileAsync().ConfigureAwait(false);
             }
 
@@ -282,10 +286,17 @@ namespace NextIteration.SpectreConsole.Auth.Encryption
                 CredentialsDirectory.Ensure(directory);
             }
 
-            // Atomic write: a partially-written keystore would render every
-            // credential undecryptable, so this path is one we especially
-            // want crash-safe.
-            await AtomicFile.WriteAllBytesAsync(
+            // Atomic AND exclusive. Crash-safety is why this is a temp-then-rename
+            // (a half-written keystore would render every credential undecryptable);
+            // exclusivity is why it must not overwrite.
+            //
+            // Two first-run invocations can both find no keystore and both mint a data
+            // key — the ~200ms PBKDF2 derivation makes that window wide. If the second
+            // write replaced the first, every credential the first process had already
+            // encrypted would become permanently undecryptable. The loser instead
+            // discards its key and LoadOrCreateDataKeyAsync re-reads the winner's file,
+            // so both processes converge on one key and nothing is lost.
+            _ = await AtomicFile.TryWriteNewAsync(
                 _keyFile,
                 encryptedKey,
                 OperatingSystem.IsWindows() ? null : UnixFileMode.UserRead | UnixFileMode.UserWrite).ConfigureAwait(false);
