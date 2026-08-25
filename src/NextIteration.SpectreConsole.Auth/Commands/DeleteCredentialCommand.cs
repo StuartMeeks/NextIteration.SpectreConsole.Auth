@@ -31,7 +31,7 @@ namespace NextIteration.SpectreConsole.Auth.Commands
                 else
                 {
                     // Interactive selection
-                    var providers = await _credentialManager.GetProviderNamesAsync().ConfigureAwait(false);
+                    var providers = await _credentialManager.GetProviderNamesAsync(cancellationToken).ConfigureAwait(false);
                     if (!providers.Any())
                     {
                         AnsiConsole.MarkupLine("[yellow]No credentials found.[/]");
@@ -41,7 +41,7 @@ namespace NextIteration.SpectreConsole.Auth.Commands
                     var allCredentials = new List<CredentialSummary>();
                     foreach (var provider in providers)
                     {
-                        var credentials = await _credentialManager.ListCredentialsAsync(provider).ConfigureAwait(false);
+                        var credentials = await _credentialManager.ListCredentialsAsync(provider, cancellationToken).ConfigureAwait(false);
                         allCredentials.AddRange(credentials);
                     }
 
@@ -70,7 +70,7 @@ namespace NextIteration.SpectreConsole.Auth.Commands
                     return 0;
                 }
 
-                var success = await _credentialManager.DeleteCredentialAsync(accountId).ConfigureAwait(false);
+                var success = await _credentialManager.DeleteCredentialAsync(accountId, cancellationToken).ConfigureAwait(false);
 
                 if (success)
                 {

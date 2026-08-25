@@ -615,6 +615,24 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
             Assert.False(listed.Single(c => c.AccountId == prod).IsSelected);
         }
 
+        [Fact]
+        [SupportedOSPlatform("linux")]
+        public async Task Operations_HonourAnAlreadyCancelledToken()
+        {
+            Assert.SkipWhen(_skip, SkipReason);
+
+            var manager = NewManager();
+            using var cts = new CancellationTokenSource();
+            await cts.CancelAsync();
+
+            // The GCancellable is created from the token, so an already-cancelled token is
+            // cancelled before libsecret is entered (#74).
+            _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(
+                () => manager.AddCredentialAsync("Adobe", "prod", "Production", "{}", cts.Token));
+            _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(
+                () => manager.ListCredentialsAsync("Adobe", cts.Token));
+        }
+
         private sealed class FakeAdobeSummaryProvider : ICredentialSummaryProvider
         {
             public string ProviderName => "Adobe";

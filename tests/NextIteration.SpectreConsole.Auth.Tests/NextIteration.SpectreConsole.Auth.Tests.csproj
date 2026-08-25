@@ -19,6 +19,14 @@
 			CA2007 (ConfigureAwait) doesn't apply in test contexts; there
 			is no SynchronizationContext to recapture.
 
+			xUnit1051 (pass TestContext.Current.CancellationToken) fires at every call
+			into ICredentialManager now that its members accept a CancellationToken —
+			530 sites. The analyzer's benefit is making a cancelled test run stop
+			promptly; these tests are sub-second and the platform tears them down
+			anyway, so threading a token through every call would add noise far out of
+			proportion to that. Suppressed deliberately, not by accident. New tests
+			that specifically exercise cancellation pass a real token explicitly.
+
 			IDE0005 (remove unnecessary usings) only runs at build when
 			GenerateDocumentationFile is true — which a test project sets to
 			false (above). With EnforceCodeStyleInBuild on (STANDARD.md 1.2.1),
@@ -27,7 +35,7 @@
 			IDE0005 still gates the shipping project. STANDARD.md 2.7 needs the
 			matching amendment estate-wide.
 		-->
-		<NoWarn>$(NoWarn);CA1707;CA1515;CA2007;IDE0005</NoWarn>
+		<NoWarn>$(NoWarn);CA1707;CA1515;CA2007;IDE0005;xUnit1051</NoWarn>
 	</PropertyGroup>
 
 	<ItemGroup>

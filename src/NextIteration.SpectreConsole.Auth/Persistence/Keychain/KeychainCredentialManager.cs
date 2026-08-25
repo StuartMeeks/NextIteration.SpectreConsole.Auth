@@ -59,8 +59,9 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Keychain
         }
 
         /// <inheritdoc />
-        public Task<string> AddCredentialAsync(string providerName, string accountName, string environment, string credentialData)
+        public Task<string> AddCredentialAsync(string providerName, string accountName, string environment, string credentialData, CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             ValidateProviderName(providerName);
             var accountId = Guid.NewGuid().ToString();
 
@@ -110,8 +111,9 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Keychain
         }
 
         /// <inheritdoc />
-        public Task<IEnumerable<CredentialSummary>> ListCredentialsAsync(string providerName)
+        public Task<IEnumerable<CredentialSummary>> ListCredentialsAsync(string providerName, CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             ValidateProviderName(providerName);
             providerName = ResolveStoredProviderName(providerName);
             var service = ServiceFor(providerName);
@@ -146,8 +148,9 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Keychain
         }
 
         /// <inheritdoc />
-        public Task<bool> DeleteCredentialAsync(string accountId)
+        public Task<bool> DeleteCredentialAsync(string accountId, CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (!IsValidAccountId(accountId))
             {
                 return Task.FromResult(false);
@@ -176,8 +179,9 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Keychain
         }
 
         /// <inheritdoc />
-        public Task<bool> SelectCredentialAsync(string accountId)
+        public Task<bool> SelectCredentialAsync(string accountId, CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (!IsValidAccountId(accountId))
             {
                 return Task.FromResult(false);
@@ -200,8 +204,9 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Keychain
         }
 
         /// <inheritdoc />
-        public Task<string?> GetSelectedCredentialAsync(string providerName)
+        public Task<string?> GetSelectedCredentialAsync(string providerName, CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             ValidateProviderName(providerName);
             providerName = ResolveStoredProviderName(providerName);
             var selectedId = ReadSelection(providerName);
@@ -214,8 +219,9 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Keychain
         }
 
         /// <inheritdoc />
-        public Task<string?> GetCredentialByIdAsync(string providerName, string accountId)
+        public Task<string?> GetCredentialByIdAsync(string providerName, string accountId, CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             ValidateProviderName(providerName);
             providerName = ResolveStoredProviderName(providerName);
             ValidateAccountId(accountId);
@@ -244,8 +250,9 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Keychain
         }
 
         /// <inheritdoc />
-        public Task<IEnumerable<string>> GetProviderNamesAsync()
+        public Task<IEnumerable<string>> GetProviderNamesAsync(CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             // Query every generic-password item owned by this app and distinct
             // the provider portion out of the service string.
             var items = QueryAllItemsForApp(includeData: false);
@@ -262,8 +269,9 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Keychain
         }
 
         /// <inheritdoc />
-        public Task<IReadOnlyList<CredentialExport>> ExportCredentialsAsync()
+        public Task<IReadOnlyList<CredentialExport>> ExportCredentialsAsync(CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var items = QueryAllItemsForApp(includeData: true);
             var selectionCache = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
 
@@ -320,8 +328,9 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Keychain
         }
 
         /// <inheritdoc />
-        public Task RestoreCredentialAsync(CredentialExport credential)
+        public Task RestoreCredentialAsync(CredentialExport credential, CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             ArgumentNullException.ThrowIfNull(credential);
             ValidateProviderName(credential.ProviderName);
             ValidateAccountId(credential.AccountId);

@@ -66,6 +66,20 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Libsecret
         [LibraryImport(Libglib)]
         internal static partial void g_list_free(IntPtr list);
 
+        private const string Libgio = "libgio-2.0.so.0";
+
+        /// <summary>Creates a GCancellable. Release with <see cref="g_object_unref"/>.</summary>
+        [LibraryImport(Libgio)]
+        internal static partial IntPtr g_cancellable_new();
+
+        /// <summary>
+        /// Cancels a GCancellable. Thread-safe by contract, which is the whole point: it is
+        /// called from the cancellation-token callback while another thread sits blocked
+        /// inside a synchronous libsecret call, and it is what makes that call return.
+        /// </summary>
+        [LibraryImport(Libgio)]
+        internal static partial void g_cancellable_cancel(IntPtr cancellable);
+
         /// <summary>
         /// Frees a GList <b>and</b> each node's data, using <paramref name="freeFunc"/>.
         /// </summary>

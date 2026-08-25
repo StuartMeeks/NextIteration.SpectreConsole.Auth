@@ -52,16 +52,16 @@ namespace NextIteration.SpectreConsole.Auth.Portability
         /// Reads every stored credential and returns it as a passphrase-encrypted
         /// archive.
         /// </summary>
-        internal async Task<ExportResult> ExportAsync(string passphrase)
+        internal async Task<ExportResult> ExportAsync(string passphrase, CancellationToken cancellationToken = default)
         {
-            var credentials = await _manager.ExportCredentialsAsync().ConfigureAwait(false);
+            var credentials = await _manager.ExportCredentialsAsync(cancellationToken).ConfigureAwait(false);
             var bundle = CredentialArchive.Serialize(credentials, passphrase);
 
             // The backend drops credentials it cannot decrypt, so the archive may
             // hold fewer than the store does. Derive the difference from the
             // metadata listing rather than widening the public
             // ICredentialManager.ExportCredentialsAsync signature to report it.
-            var stored = await CountStoredCredentialsAsync().ConfigureAwait(false);
+            var stored = await CountStoredCredentialsAsync(cancellationToken).ConfigureAwait(false);
             return new ExportResult(bundle, credentials.Count, Math.Max(0, stored - credentials.Count));
         }
 
@@ -78,15 +78,17 @@ namespace NextIteration.SpectreConsole.Auth.Portability
         /// resolve it. Invoked only when there is an actual conflict. The existing
         /// side is metadata only — see <see cref="BuildConflictIndexAsync"/>.
         /// </param>
+        /// <param name="cancellationToken">Cancels the import.</param>
         internal async Task<ImportResult> ImportAsync(
             string bundle,
             string passphrase,
-            Func<CredentialExport, CredentialSummary, ConflictResolution> resolveConflict)
+            Func<CredentialExport, CredentialSummary, ConflictResolution> resolveConflict,
+            CancellationToken cancellationToken = default)
         {
             ArgumentNullException.ThrowIfNull(resolveConflict);
 
             var incoming = CredentialArchive.Deserialize(bundle, passphrase);
-            var existingByKey = await BuildConflictIndexAsync().ConfigureAwait(false);
+            var existingByKey = await BuildConflictIndexAsync(cancellationToken).ConfigureAwait(false);
 
             var added = 0;
             var overwritten = 0;
@@ -105,13 +107,13 @@ namespace NextIteration.SpectreConsole.Auth.Portability
 
                     // Overwrite: drop the existing credential (which may carry a
                     // different account id) before restoring the incoming one.
-                    _ = await _manager.DeleteCredentialAsync(match.AccountId).ConfigureAwait(false);
-                    await _manager.RestoreCredentialAsync(entry).ConfigureAwait(false);
+                    _ = await _manager.DeleteCredentialAsync(match.AccountId, cancellationToken).ConfigureAwait(false);
+                    await _manager.RestoreCredentialAsync(entry, cancellationToken).ConfigureAwait(false);
                     overwritten++;
                 }
                 else
                 {
-                    await _manager.RestoreCredentialAsync(entry).ConfigureAwait(false);
+                    await _manager.RestoreCredentialAsync(entry, cancellationToken).ConfigureAwait(false);
                     added++;
                 }
             }
@@ -132,13 +134,13 @@ namespace NextIteration.SpectreConsole.Auth.Portability
         /// a single credential the local keystore cannot open aborted the entire
         /// import, which is exactly the store an import is meant to repair.
         /// </remarks>
-        private async Task<Dictionary<string, CredentialSummary>> BuildConflictIndexAsync()
+        private async Task<Dictionary<string, CredentialSummary>> BuildConflictIndexAsync(CancellationToken cancellationToken)
         {
             var index = new Dictionary<string, CredentialSummary>(StringComparer.Ordinal);
 
-            foreach (var provider in await _manager.GetProviderNamesAsync().ConfigureAwait(false))
+            foreach (var provider in await _manager.GetProviderNamesAsync(cancellationToken).ConfigureAwait(false))
             {
-                foreach (var summary in await _manager.ListCredentialsAsync(provider).ConfigureAwait(false))
+                foreach (var summary in await _manager.ListCredentialsAsync(provider, cancellationToken).ConfigureAwait(false))
                 {
                     // Duplicates on the same key are unusual but possible; keep the
                     // first as the conflict target.
@@ -155,12 +157,12 @@ namespace NextIteration.SpectreConsole.Auth.Portability
         /// Counts what the store holds, from metadata only, so an export can report
         /// how many credentials it had to leave out.
         /// </summary>
-        private async Task<int> CountStoredCredentialsAsync()
+        private async Task<int> CountStoredCredentialsAsync(CancellationToken cancellationToken)
         {
             var count = 0;
-            foreach (var provider in await _manager.GetProviderNamesAsync().ConfigureAwait(false))
+            foreach (var provider in await _manager.GetProviderNamesAsync(cancellationToken).ConfigureAwait(false))
             {
-                count += (await _manager.ListCredentialsAsync(provider).ConfigureAwait(false)).Count();
+                count += (await _manager.ListCredentialsAsync(provider, cancellationToken).ConfigureAwait(false)).Count();
             }
 
             return count;
