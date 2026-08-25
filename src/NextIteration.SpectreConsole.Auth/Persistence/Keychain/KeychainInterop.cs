@@ -153,6 +153,18 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Keychain
             internal static readonly IntPtr KSecAttrLabel = LoadSymbol(Security, "kSecAttrLabel");
             internal static readonly IntPtr KSecAttrDescription = LoadSymbol(Security, "kSecAttrDescription");
             internal static readonly IntPtr KSecAttrGeneric = LoadSymbol(Security, "kSecAttrGeneric");
+
+            /// <summary>
+            /// <c>kSecAttrComment</c>. Used to record which app owns an item.
+            /// </summary>
+            /// <remarks>
+            /// Deliberately not <c>kSecAttrGeneric</c>, which participates in the primary
+            /// key for generic-password items on some macOS versions — adding it to items
+            /// that previously lacked it would change uniqueness semantics and could let a
+            /// legacy item and a new one coexist for the same service + account.
+            /// <c>kSecAttrComment</c> is plain metadata and carries no such risk.
+            /// </remarks>
+            internal static readonly IntPtr KSecAttrComment = LoadSymbol(Security, "kSecAttrComment");
             internal static readonly IntPtr KSecAttrCreationDate = LoadSymbol(Security, "kSecAttrCreationDate");
             internal static readonly IntPtr KSecValueData = LoadSymbol(Security, "kSecValueData");
 

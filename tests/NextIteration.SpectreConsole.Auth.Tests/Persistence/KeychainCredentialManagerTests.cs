@@ -455,6 +455,62 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
             Assert.False(listed.Single(c => c.AccountId == prod).IsSelected);
         }
 
+        [Fact]
+        [SupportedOSPlatform("macos")]
+        public async Task Items_AreInvisibleToAnAppWhoseIdentifierIsADotPrefix()
+        {
+            Assert.SkipWhen(_skip, SkipReason);
+
+            // "…cli" is a dot-prefix of "…cli.pro", and the service string is
+            // "{app}.{provider}" — so the neighbour's prefix test matched pro's item and it
+            // could list, export and delete another CLI's credentials (#55).
+            var neighbourId = $"test.nextiteration.sca.{Guid.NewGuid():N}";
+            var neighbour = new KeychainCredentialManager(neighbourId);
+            var pro = new KeychainCredentialManager(neighbourId + ".pro");
+
+            var id = await pro.AddCredentialAsync("Adobe", "prod", "Production", "{\"apiKey\":\"PRO\"}");
+            try
+            {
+                // pro's service is "{neighbourId}.pro.Adobe": it still starts with
+                // "{neighbourId}." so the old check matched, but the owner attribute does not.
+                Assert.Empty(await neighbour.GetProviderNamesAsync());
+                Assert.Empty(await neighbour.ExportCredentialsAsync());
+                Assert.Empty(await neighbour.ListCredentialsAsync("pro.Adobe"));
+
+                // And the owner still sees its own item.
+                Assert.Single(await RetryHelper.UntilAsync(() => pro.ExportCredentialsAsync(), r => r.Count == 1));
+            }
+            finally
+            {
+                _ = await pro.DeleteCredentialAsync(id);
+            }
+        }
+
+        [Fact]
+        [SupportedOSPlatform("macos")]
+        public async Task NeighbourCannotDeleteAnotherAppsCredential()
+        {
+            Assert.SkipWhen(_skip, SkipReason);
+
+            var neighbourId = $"test.nextiteration.sca.{Guid.NewGuid():N}";
+            var neighbour = new KeychainCredentialManager(neighbourId);
+            var pro = new KeychainCredentialManager(neighbourId + ".pro");
+
+            var id = await pro.AddCredentialAsync("Adobe", "prod", "Production", "{\"apiKey\":\"PRO\"}");
+            try
+            {
+                // The destructive half of the same bug: delete resolves the item through the
+                // same app-scoped lookup, so an unfixed prefix test let a neighbour remove
+                // credentials it does not own.
+                Assert.False(await neighbour.DeleteCredentialAsync(id));
+                Assert.Single(await RetryHelper.UntilAsync(() => pro.ExportCredentialsAsync(), r => r.Count == 1));
+            }
+            finally
+            {
+                _ = await pro.DeleteCredentialAsync(id);
+            }
+        }
+
         private sealed class FakeAdobeSummaryProvider : ICredentialSummaryProvider
         {
             public string ProviderName => "Adobe";
