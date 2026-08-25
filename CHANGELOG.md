@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`accounts export` wrote the whole archive at default permissions before tightening them**
+  (#54). `AtomicFile` created its temp file with the umask default and chmod'd to `0600` only
+  after the entire payload had landed. For credential files and the keystore that is shielded
+  by the credentials directory's own `0700`, but `accounts export` writes to a destination the
+  user chooses — exporting to `/tmp` or any shared directory left every secret in the store
+  readable for the duration of the write. Temp files are now created with their final mode via
+  `FileStreamOptions.UnixCreateMode`, so the window does not exist.
+
 - **An imported archive dictated its own PBKDF2 iteration count, unbounded** (#53). The value
   came from the archive's clear-text envelope with only a `> 0` check and fed straight into
   `Rfc2898DeriveBytes.Pbkdf2`. `Iterations` is an `int`, so a hostile or corrupt archive could
