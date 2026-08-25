@@ -52,11 +52,65 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
 
             (await SelectionsLock.AcquireAsync(lockPath, TestContext.Current.CancellationToken)).Dispose();
 
-            // DeleteOnClose should clean up the sentinel file when the holder
-            // disposes; a fresh acquirer must succeed without seeing a stale
-            // lock.
+            // DeleteOnClose is what makes stale-lock recovery unnecessary, and the type's
+            // remarks lean on it ("there is no stale-lock recovery code to maintain"). The
+            // comment here used to claim it without asserting it, so dropping the flag would
+            // have left a permanent lock file and still passed (#57).
+            Assert.False(File.Exists(lockPath), "sentinel file survived dispose");
+
             using var second = await SelectionsLock.AcquireAsync(lockPath, TestContext.Current.CancellationToken);
             Assert.NotNull(second);
+        }
+
+        [Fact]
+        public async Task Acquire_WhenHeldThroughout_EventuallyThrowsWithAnActionableMessage()
+        {
+            using var temp = new TempDir();
+            var lockPath = Path.Join(temp.Path, "selections.json.lock");
+
+            using var holder = await SelectionsLock.AcquireAsync(lockPath, TestContext.Current.CancellationToken);
+
+            // The ~5.1s backoff ladder ending in a thrown IOException was never reached by
+            // any test, so neither its message nor its behaviour under a genuinely stuck
+            // peer was verified (#57).
+            var ex = await Assert.ThrowsAsync<IOException>(
+                () => SelectionsLock.AcquireAsync(lockPath, TestContext.Current.CancellationToken));
+
+            Assert.Contains(lockPath, ex.Message, StringComparison.Ordinal);
+            Assert.Contains("Another process may be holding it", ex.Message, StringComparison.Ordinal);
+
+            // The IOException that actually blocked acquisition is preserved, not discarded.
+            Assert.NotNull(ex.InnerException);
+        }
+
+        [Fact]
+        public async Task Acquire_SerialisesConcurrentHolders()
+        {
+            using var temp = new TempDir();
+            var lockPath = Path.Join(temp.Path, "selections.json.lock");
+
+            // The lock's actual job is serialising FileCredentialManager's selections
+            // read-modify-write. Assert mutual exclusion directly: overlapping critical
+            // sections are what a broken lock produces.
+            var inside = 0;
+            var overlaps = 0;
+
+            async Task Contend()
+            {
+                using var held = await SelectionsLock.AcquireAsync(lockPath, TestContext.Current.CancellationToken);
+                if (Interlocked.Increment(ref inside) != 1)
+                {
+                    _ = Interlocked.Increment(ref overlaps);
+                }
+
+                await Task.Delay(15, TestContext.Current.CancellationToken);
+                _ = Interlocked.Decrement(ref inside);
+            }
+
+            await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => Contend()));
+
+            Assert.Equal(0, overlaps);
+            Assert.False(File.Exists(lockPath), "sentinel file survived the last dispose");
         }
     }
 }
