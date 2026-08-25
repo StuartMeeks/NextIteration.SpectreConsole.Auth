@@ -706,6 +706,53 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
                 () => manager.GetCredentialByIdAsync("Adobe", badId));
         }
 
+        [Fact]
+        public async Task ListCredentialsAsync_SummaryProviderThrows_StillListsTheCredential()
+        {
+            using var temp = new TempDir();
+            var manager = CreateManager(temp.Path, [new ThrowingAdobeSummaryProvider()]);
+
+            var goodId = await manager.AddCredentialAsync("Adobe", "keeps-row", "Production", "{}");
+
+            // The projection throws JsonException, which the outer per-file catch used to
+            // swallow along with the whole credential — the row vanished from `accounts
+            // list`, so the user could not even see the id to delete it (#52).
+            var listed = (await manager.ListCredentialsAsync("Adobe")).ToList();
+
+            var only = Assert.Single(listed);
+            Assert.Equal(goodId, only.AccountId);
+            Assert.Equal("keeps-row", only.AccountName);
+            Assert.Empty(only.DisplayFields);
+            Assert.False(only.IsDecryptable);
+        }
+
+        [Fact]
+        public async Task ListCredentialsAsync_SummaryProviderThrows_DoesNotAffectOtherRows()
+        {
+            using var temp = new TempDir();
+            var manager = CreateManager(temp.Path, [new ThrowingAdobeSummaryProvider()]);
+
+            _ = await manager.AddCredentialAsync("Adobe", "a", "Production", "{}");
+            _ = await manager.AddCredentialAsync("Adobe", "b", "Production", "{}");
+
+            // One bad projection must not take down the provider's whole listing.
+            Assert.Equal(2, (await manager.ListCredentialsAsync("Adobe")).Count());
+        }
+
+        /// <summary>
+        /// Stands in for a consumer whose projection cannot parse a stored payload —
+        /// e.g. one written by an older version of that provider package. The README's
+        /// own worked example uses System.Text.Json, so JsonException is the realistic
+        /// throw here.
+        /// </summary>
+        private sealed class ThrowingAdobeSummaryProvider : ICredentialSummaryProvider
+        {
+            public string ProviderName => "Adobe";
+
+            public IReadOnlyList<KeyValuePair<string, string>> GetDisplayFields(string decryptedCredentialJson) =>
+                throw new System.Text.Json.JsonException("provider cannot parse this payload shape");
+        }
+
         /// <summary>
         /// Minimal summary provider used only to verify that
         /// <see cref="FileCredentialManager.ListCredentialsAsync"/> routes

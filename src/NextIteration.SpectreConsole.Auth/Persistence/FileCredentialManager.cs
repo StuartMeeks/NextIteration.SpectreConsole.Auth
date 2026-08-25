@@ -66,62 +66,72 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
 
             foreach (var file in credentialFiles)
             {
+                StoredCredential? credential;
                 try
                 {
                     var content = await File.ReadAllTextAsync(file).ConfigureAwait(false);
-                    var credential = JsonSerializer.Deserialize<StoredCredential>(content, _jsonOptions);
-
-                    // Defensive re-check: the glob should only match this
-                    // provider's files, but if a stray file sneaks in we want
-                    // to ignore it rather than report a mis-attributed row.
-                    // `is not null` (rather than `?.… == true`) so the null
-                    // state flows into the block — the whole body dereferences
-                    // `credential`, and this lets the analyzer prove it safe.
-                    if (credential is not null &&
-                        credential.ProviderName.Equals(providerName, StringComparison.OrdinalIgnoreCase))
-                    {
-                        var isSelected = selections.TryGetValue($"{credential.ProviderName}", out var selectedId) &&
-                                       selectedId.Equals(credential.AccountId, StringComparison.OrdinalIgnoreCase);
-
-                        IReadOnlyList<KeyValuePair<string, string>> displayFields = [];
-                        var isDecryptable = true;
-                        if (summaryProvider is not null)
-                        {
-                            try
-                            {
-                                var decrypted = await _encryption.DecryptAsync(credential.CredentialData).ConfigureAwait(false);
-                                displayFields = summaryProvider.GetDisplayFields(decrypted);
-                            }
-                            catch (InvalidOperationException)
-                            {
-                                // The payload cannot be opened with this machine's
-                                // keystore — typically a credentials directory copied
-                                // from another machine or user, or a keystore that was
-                                // replaced while its credential files survived. Render
-                                // the row without provider columns rather than taking
-                                // down the whole listing: the user needs to see the id
-                                // to remove it with `accounts delete`.
-                                isDecryptable = false;
-                            }
-                        }
-
-                        credentials.Add(new CredentialSummary
-                        {
-                            AccountId = credential.AccountId,
-                            AccountName = credential.AccountName,
-                            ProviderName = credential.ProviderName,
-                            Environment = credential.Environment,
-                            CreatedAt = credential.CreatedAt,
-                            IsSelected = isSelected,
-                            DisplayFields = displayFields,
-                            IsDecryptable = isDecryptable,
-                        });
-                    }
+                    credential = JsonSerializer.Deserialize<StoredCredential>(content, _jsonOptions);
                 }
                 catch (JsonException)
                 {
-                    // Skip invalid JSON files
+                    // Skip invalid JSON files. Scoped to the deserialize step on purpose:
+                    // this catch used to span the whole body, including the consumer's
+                    // GetDisplayFields call, so a summary provider that threw JsonException
+                    // silently removed the credential from the listing entirely (#52).
+                    continue;
                 }
+
+                // Defensive re-check: the glob should only match this provider's files,
+                // but if a stray file sneaks in we want to ignore it rather than report
+                // a mis-attributed row.
+                if (credential is null ||
+                    !credential.ProviderName.Equals(providerName, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var isSelected = selections.TryGetValue($"{credential.ProviderName}", out var selectedId) &&
+                               selectedId.Equals(credential.AccountId, StringComparison.OrdinalIgnoreCase);
+
+                IReadOnlyList<KeyValuePair<string, string>> displayFields = [];
+                var isRenderable = true;
+                if (summaryProvider is not null)
+                {
+                    try
+                    {
+                        var decrypted = await _encryption.DecryptAsync(credential.CredentialData).ConfigureAwait(false);
+                        displayFields = summaryProvider.GetDisplayFields(decrypted);
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // The payload cannot be opened with this machine's keystore —
+                        // typically a credentials directory copied from another machine or
+                        // user, or a keystore replaced while its credential files survived.
+                        isRenderable = false;
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException)
+                    {
+                        // GetDisplayFields is consumer code and can throw anything; the
+                        // README's own worked example deserializes with System.Text.Json,
+                        // so an old payload shape throws JsonException here. A broken
+                        // projection must cost this row its provider columns, never its
+                        // existence — the user still needs the id to run `accounts delete`.
+                        displayFields = [];
+                        isRenderable = false;
+                    }
+                }
+
+                credentials.Add(new CredentialSummary
+                {
+                    AccountId = credential.AccountId,
+                    AccountName = credential.AccountName,
+                    ProviderName = credential.ProviderName,
+                    Environment = credential.Environment,
+                    CreatedAt = credential.CreatedAt,
+                    IsSelected = isSelected,
+                    DisplayFields = displayFields,
+                    IsDecryptable = isRenderable,
+                });
             }
 
             return credentials.OrderBy(c => c.AccountName);
