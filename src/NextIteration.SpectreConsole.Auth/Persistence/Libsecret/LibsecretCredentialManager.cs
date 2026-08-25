@@ -680,15 +680,17 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Libsecret
                             Attributes = managedAttrs,
                             Secret = secret,
                         });
-
-                        // Each GList node owns a reference to its data; releasing
-                        // the data item itself is the caller's job.
-                        g_object_unref(retrievable);
                     }
                 }
                 finally
                 {
-                    g_list_free(listPtr);
+                    // g_list_free_full releases every node's data as well as the node
+                    // structure. The per-item g_object_unref used to sit at the end of the
+                    // loop body, so a throw part-way through — ThrowIfGError on a locked
+                    // collection or a per-item D-Bus error — skipped the current item and
+                    // every remaining one, while this finally freed only the node structure
+                    // and not the references the nodes held (#56).
+                    g_list_free_full(listPtr, GObjectUnrefFunc);
                 }
                 return results;
             }

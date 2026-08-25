@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **libsecret leaked `SecretRetrievable` references when its search loop threw** (#56). The
+  per-item `g_object_unref` was the last statement of the loop body, so a throw part-way
+  through — `ThrowIfGError` on a locked collection or a per-item D-Bus error — skipped the
+  current item and every remaining one, while the `finally` called only `g_list_free`, which
+  releases the node structure and not the references the nodes hold. The `finally` now uses
+  `g_list_free_full` with `g_object_unref` as the destroy function, the idiomatic GLib form
+  for this ownership shape, so the references are released on every path.
+
 - **`accounts export` wrote the whole archive at default permissions before tightening them**
   (#54). `AtomicFile` created its temp file with the umask default and chmod'd to `0600` only
   after the entire payload had landed. For credential files and the keystore that is shielded

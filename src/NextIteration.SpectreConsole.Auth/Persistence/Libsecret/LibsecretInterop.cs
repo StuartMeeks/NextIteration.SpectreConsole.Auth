@@ -66,6 +66,23 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Libsecret
         [LibraryImport(Libglib)]
         internal static partial void g_list_free(IntPtr list);
 
+        /// <summary>
+        /// Frees a GList <b>and</b> each node's data, using <paramref name="freeFunc"/>.
+        /// </summary>
+        /// <remarks>
+        /// Preferred over <see cref="g_list_free"/> whenever the nodes own references,
+        /// because it releases them even when the caller's loop exited early on an
+        /// exception — the case that leaked SecretRetrievable references (#56).
+        /// </remarks>
+        [LibraryImport(Libglib)]
+        internal static partial void g_list_free_full(IntPtr list, IntPtr freeFunc);
+
+        /// <summary>
+        /// Address of <c>g_object_unref</c>, for use as a GDestroyNotify with
+        /// <see cref="g_list_free_full"/>.
+        /// </summary>
+        internal static IntPtr GObjectUnrefFunc => ResolveExport(Libgobject, "g_object_unref");
+
         // =========================
         // GLib — GError
         // =========================
