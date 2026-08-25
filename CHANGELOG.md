@@ -11,6 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A summary provider that threw made the whole credential vanish from `accounts list`**
+  (#52). The per-file `catch (JsonException)` in `FileCredentialManager.ListCredentialsAsync`
+  spanned the entire loop body, including the consumer's `GetDisplayFields` call. Since the
+  README's own worked example projects with `System.Text.Json`, a payload shape it could not
+  parse threw `JsonException` and the credential was silently dropped from the listing — not
+  marked, not counted, just absent, which also hid the id needed to run `accounts delete` on
+  it. The JSON catch is now scoped to the deserialize step, and the projection is guarded
+  separately: a throwing provider costs that row its provider columns and marks it
+  `IsDecryptable = false`, never its existence. `IsDecryptable`'s documentation is widened to
+  match — it now means "this row's provider columns could not be produced", covering both an
+  unavailable payload and a projection that threw.
+
 - **The libsecret test suite disabled itself when the code it tests regressed** (#46). Its
   availability probe performed a real store + clear through `AddCredentialAsync` /
   `DeleteCredentialAsync` inside a catch-all, so a regression in exactly the code under test

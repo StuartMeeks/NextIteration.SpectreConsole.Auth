@@ -160,11 +160,12 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
         public IReadOnlyList<KeyValuePair<string, string>> DisplayFields { get; init; } = [];
 
         /// <summary>
-        /// Display hint: <see langword="false"/> when the stored payload was asked
-        /// for and could not be produced — it failed to decrypt (file backend) or did
-        /// not load from the OS store (Keychain, libsecret) — so
-        /// <see cref="DisplayFields"/> is empty for that reason rather than because no
-        /// summary provider is registered.
+        /// Display hint: <see langword="false"/> when this credential's provider
+        /// columns could not be produced, so <see cref="DisplayFields"/> is empty for
+        /// that reason rather than because no summary provider is registered. Either
+        /// the payload itself was unavailable — it failed to decrypt (file backend) or
+        /// did not load from the OS store (Keychain, libsecret) — or the registered
+        /// <see cref="ICredentialSummaryProvider"/> threw while projecting it.
         /// </summary>
         /// <remarks>
         /// This is not a guarantee that the payload <em>is</em> readable. The
