@@ -26,6 +26,10 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
         private readonly string _appIdentifier;
         private readonly bool _skip;
 
+        // Reported as a real skip rather than an early return, so a non-macOS run
+        // shows up as skipped instead of silently passing.
+        private const string SkipReason = "macOS is required for the Keychain backend.";
+
         public KeychainCredentialManagerTests()
         {
             _skip = !OperatingSystem.IsMacOS();
@@ -34,7 +38,9 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
 
         public void Dispose()
         {
-            // Best-effort cleanup: delete everything this test added.
+            // Best-effort cleanup: delete everything this test added. Not a skip point —
+            // Dispose runs after a skipped test too, and throwing the dynamic-skip
+            // exception here surfaces as a failure rather than a skip.
             if (_skip)
             {
                 return;
@@ -73,10 +79,7 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
         [Fact]
         public async Task ExportCredentialsAsync_ReturnsDecryptedPayloadAndSelection()
         {
-            if (_skip)
-            {
-                return;
-            }
+            Assert.SkipWhen(_skip, SkipReason);
 
             var manager = NewManager();
             var id = await manager.AddCredentialAsync("Adobe", "prod", "Production", "{\"apiKey\":\"secret\"}");
@@ -101,10 +104,7 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
         {
             // The macOS Keychain assigns its own creation date, so CreatedAt is
             // intentionally not asserted here (see RestoreCredentialAsync remarks).
-            if (_skip)
-            {
-                return;
-            }
+            Assert.SkipWhen(_skip, SkipReason);
 
             var manager = NewManager();
             var id = await manager.AddCredentialAsync("Adobe", "prod", "Production", "{\"apiKey\":\"secret\"}");
@@ -124,10 +124,7 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
         [Fact]
         public async Task AddCredentialAsync_ReturnsGuidAccountId()
         {
-            if (_skip)
-            {
-                return;
-            }
+            Assert.SkipWhen(_skip, SkipReason);
 
             var manager = NewManager();
 
@@ -139,10 +136,7 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
         [Fact]
         public async Task ListCredentialsAsync_ReturnsAddedCredential()
         {
-            if (_skip)
-            {
-                return;
-            }
+            Assert.SkipWhen(_skip, SkipReason);
 
             var manager = NewManager();
             var accountId = await manager.AddCredentialAsync("Adobe", "prod", "Production", "{}");
@@ -160,10 +154,7 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
         [Fact]
         public async Task ListCredentialsAsync_FiltersByProvider()
         {
-            if (_skip)
-            {
-                return;
-            }
+            Assert.SkipWhen(_skip, SkipReason);
 
             var manager = NewManager();
             _ = await manager.AddCredentialAsync("Adobe", "a1", "Production", "{}");
@@ -181,10 +172,7 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
         [Fact]
         public async Task SelectAndGetSelected_RoundTripsDecryptedPayload()
         {
-            if (_skip)
-            {
-                return;
-            }
+            Assert.SkipWhen(_skip, SkipReason);
 
             var manager = NewManager();
             var payload = "{\"apiKey\":\"super-secret\"}";
@@ -199,10 +187,7 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
         [Fact]
         public async Task SelectCredentialAsync_ReturnsFalse_WhenNotFound()
         {
-            if (_skip)
-            {
-                return;
-            }
+            Assert.SkipWhen(_skip, SkipReason);
 
             var manager = NewManager();
 
@@ -214,10 +199,7 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
         [Fact]
         public async Task GetSelectedCredentialAsync_ReturnsNull_WhenNoneSelected()
         {
-            if (_skip)
-            {
-                return;
-            }
+            Assert.SkipWhen(_skip, SkipReason);
 
             var manager = NewManager();
             _ = await manager.AddCredentialAsync("Adobe", "prod", "Production", "{}");
@@ -230,10 +212,7 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
         [Fact]
         public async Task GetCredentialByIdAsync_ReturnsDecryptedPayload_ForExistingAccount()
         {
-            if (_skip)
-            {
-                return;
-            }
+            Assert.SkipWhen(_skip, SkipReason);
 
             var manager = NewManager();
             var payload = "{\"apiKey\":\"super-secret\"}";
@@ -247,10 +226,7 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
         [Fact]
         public async Task GetCredentialByIdAsync_ReturnsNull_ForUnknownAccountId()
         {
-            if (_skip)
-            {
-                return;
-            }
+            Assert.SkipWhen(_skip, SkipReason);
 
             var manager = NewManager();
             _ = await manager.AddCredentialAsync("Adobe", "prod", "Production", "{}");
@@ -263,10 +239,7 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
         [Fact]
         public async Task GetCredentialByIdAsync_DoesNotMutateSelection()
         {
-            if (_skip)
-            {
-                return;
-            }
+            Assert.SkipWhen(_skip, SkipReason);
 
             var manager = NewManager();
             var selectedId = await manager.AddCredentialAsync("Adobe", "selected", "Production", "{\"a\":1}");
@@ -283,10 +256,7 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
         [Fact]
         public async Task GetCredentialByIdAsync_ReturnsNull_WhenProviderMismatches()
         {
-            if (_skip)
-            {
-                return;
-            }
+            Assert.SkipWhen(_skip, SkipReason);
 
             var manager = NewManager();
             var adobeId = await manager.AddCredentialAsync("Adobe", "adobe-acct", "Production", "{}");
@@ -299,10 +269,7 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
         [Fact]
         public async Task DeleteCredentialAsync_RemovesCredential()
         {
-            if (_skip)
-            {
-                return;
-            }
+            Assert.SkipWhen(_skip, SkipReason);
 
             var manager = NewManager();
             var accountId = await manager.AddCredentialAsync("Adobe", "prod", "Production", "{}");
@@ -317,10 +284,7 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
         [Fact]
         public async Task DeleteCredentialAsync_ClearsSelection_IfItWasSelected()
         {
-            if (_skip)
-            {
-                return;
-            }
+            Assert.SkipWhen(_skip, SkipReason);
 
             var manager = NewManager();
             var accountId = await manager.AddCredentialAsync("Adobe", "prod", "Production", "{}");
@@ -334,10 +298,7 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
         [Fact]
         public async Task DeleteCredentialAsync_ReturnsFalse_WhenNotFound()
         {
-            if (_skip)
-            {
-                return;
-            }
+            Assert.SkipWhen(_skip, SkipReason);
 
             var manager = NewManager();
 
@@ -349,10 +310,7 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
         [Fact]
         public async Task GetProviderNamesAsync_ReturnsDistinctProviders()
         {
-            if (_skip)
-            {
-                return;
-            }
+            Assert.SkipWhen(_skip, SkipReason);
 
             var manager = NewManager();
             _ = await manager.AddCredentialAsync("Adobe", "a1", "Production", "{}");
@@ -369,10 +327,7 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
         [Fact]
         public async Task Credentials_AreIsolated_ByAppIdentifier()
         {
-            if (_skip)
-            {
-                return;
-            }
+            Assert.SkipWhen(_skip, SkipReason);
 
             // Create a neighbour app that shouldn't see our items.
             var neighbourIdentifier = $"test.nextiteration.sca.neighbour.{Guid.NewGuid():N}";
@@ -408,10 +363,7 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
         [InlineData("pro vider")]
         public async Task AddCredentialAsync_InvalidProviderName_Throws(string providerName)
         {
-            if (_skip)
-            {
-                return;
-            }
+            Assert.SkipWhen(_skip, SkipReason);
 
             var manager = NewManager();
 
@@ -422,10 +374,7 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
         [Fact]
         public void Constructor_NullAppIdentifier_Throws()
         {
-            if (_skip)
-            {
-                return;
-            }
+            Assert.SkipWhen(_skip, SkipReason);
 #pragma warning disable CA1416
             Assert.ThrowsAny<ArgumentException>(() => new KeychainCredentialManager(null!));
 #pragma warning restore CA1416
@@ -434,10 +383,7 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
         [Fact]
         public void Constructor_EmptyAppIdentifier_Throws()
         {
-            if (_skip)
-            {
-                return;
-            }
+            Assert.SkipWhen(_skip, SkipReason);
 #pragma warning disable CA1416
             Assert.ThrowsAny<ArgumentException>(() => new KeychainCredentialManager(""));
 #pragma warning restore CA1416
@@ -446,10 +392,7 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
         [Fact]
         public async Task ListCredentialsAsync_IncludesDisplayFields_FromSummaryProvider()
         {
-            if (_skip)
-            {
-                return;
-            }
+            Assert.SkipWhen(_skip, SkipReason);
 
             var summaryProvider = new FakeAdobeSummaryProvider();
             var manager = NewManager([summaryProvider]);

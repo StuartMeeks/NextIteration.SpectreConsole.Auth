@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The libsecret test suite disabled itself when the code it tests regressed** (#46). Its
+  availability probe performed a real store + clear through `AddCredentialAsync` /
+  `DeleteCredentialAsync` inside a catch-all, so a regression in exactly the code under test
+  made the probe throw, set the skip flag, and turn all ~20 tests into no-ops that still
+  reported as passing. The probe now uses the interop layer directly — a read-only search
+  against attributes nothing can match — and touches no part of the manager. Sabotaging
+  `AddCredentialAsync` now produces 46 failures where it previously produced none.
+  Platform-guarded tests in both the libsecret and Keychain suites also report as **skipped**
+  instead of returning early and counting as passed, so a run that verifies nothing says so:
+  50 skipped on Linux where the total previously read `skipped: 0`.
+
 - **Two concurrent first runs could silently destroy one set of credentials** (#44). Keystore
   creation was an unlocked check-then-write: both invocations found no `.keystore`, both spent
   ~200ms deriving a KEK, and the second write replaced the first via an unconditional atomic
