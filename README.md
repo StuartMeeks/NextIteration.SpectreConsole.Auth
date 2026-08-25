@@ -304,9 +304,22 @@ services.AddCredentialStore(opts =>
 
 > ⚠️ **Experimental.** Requires a running Secret Service daemon — headless
 > containers and SSH-only servers typically don't have one, and operations
-> will throw with a clear message. Primarily validated against GNOME
-> Keyring on Ubuntu. `UseKeyring = true` on non-Linux platforms throws
-> `PlatformNotSupportedException` at registration time.
+> will throw with a clear message. `UseKeyring = true` on non-Linux platforms
+> throws `PlatformNotSupportedException` at registration time.
+
+**Validated against GNOME Keyring only.** KWallet's Secret Service shim
+(`ksecretd`) was tested and does *not* work unattended (see
+[#19](https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/issues/19)):
+
+- It does not provide the `session` collection that GNOME Keyring does, so
+  `KeyringCollection = "session"` fails outright with *"No such object path
+  `/org/freedesktop/secrets/aliases/session`"*.
+- With the default collection it prompts to unlock the wallet. In a desktop KDE
+  session a user can answer that; with no GUI the call **blocks indefinitely**,
+  because libsecret's synchronous API is invoked without a cancellable.
+
+Treat KWallet as unsupported until that is addressed. Other Secret Service
+implementations are untested.
 
 `UseKeyring` and `UseKeychain` are mutually exclusive — setting both throws.
 The file-based backend remains the default when neither is set.
@@ -373,7 +386,7 @@ Everything else is transitive.
 
 ## Contributing
 
-Issues and PRs welcome. Outstanding hardening is tracked in [GitHub issues](https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/issues) — currently KWallet validation for the libsecret backend ([#19](https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/issues/19)).
+Issues and PRs welcome. Outstanding hardening is tracked in [GitHub issues](https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/issues) — currently the libsecret backend blocking on a Secret Service prompt ([#74](https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/issues/74)).
 
 When contributing code, please keep the zero-warning, fully-documented public surface. `TreatWarningsAsErrors` is on for a reason.
 

@@ -59,10 +59,11 @@ namespace NextIteration.SpectreConsole.Auth
         /// registration.
         /// </summary>
         /// <remarks>
-        /// The libsecret backend is marked <b>experimental</b>. Requires a
-        /// running Secret Service (GNOME Keyring, KWallet's shim, etc.);
-        /// headless containers typically lack one and registration will
-        /// surface a clear error.
+        /// The libsecret backend is marked <b>experimental</b> and is validated
+        /// against GNOME Keyring only — KWallet's shim was tested and does not work
+        /// unattended (see the remarks on <c>LibsecretCredentialManager</c>). Requires a
+        /// running Secret Service; headless containers typically lack one and
+        /// registration will surface a clear error.
         /// </remarks>
         public bool UseKeyring { get; set; }
 
@@ -76,6 +77,11 @@ namespace NextIteration.SpectreConsole.Auth
         /// <summary>
         /// Secret Service collection that stored items are written to.
         /// Defaults to <c>"default"</c> (usually the user's login keyring).
+        /// <para>
+        /// Note that <c>"session"</c> is a GNOME Keyring convenience and is not
+        /// universal: KWallet's shim does not provide it, so a value that works under
+        /// one Secret Service implementation may not under another (#19).
+        /// </para>
         /// Set to <c>"session"</c> for the in-memory session keyring that
         /// always exists on a running Secret Service daemon — useful for
         /// CI environments where the login keyring has not been

@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The libsecret backend is now documented as GNOME Keyring only** (#19). It was described
+  as working with "GNOME Keyring, KWallet's shim, any Secret Service implementation", which
+  testing disproved. KWallet's shim (`ksecretd`) fails unattended in two distinct ways: it does
+  not provide the `session` collection GNOME Keyring offers, so selecting it fails with
+  *"No such object path `/org/freedesktop/secrets/aliases/session`"*; and against the default
+  collection it raises a wallet-unlock prompt which, with no GUI, blocks the caller forever.
+  The README and the XML docs now say what is actually validated, and `KeyringCollection`
+  notes that `"session"` is a GNOME convenience rather than a portable value. Documentation
+  only — no behaviour change. The blocking-call defect the validation surfaced is tracked
+  separately in #74.
+
 ### Fixed
 
 - **The Keychain backend could see another CLI's credentials** (#55). App scoping was a
