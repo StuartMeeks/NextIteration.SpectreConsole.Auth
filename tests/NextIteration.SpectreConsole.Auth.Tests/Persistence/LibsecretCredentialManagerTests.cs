@@ -512,6 +512,28 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
             Assert.NotEqual(string.Empty, exported.CredentialData);
         }
 
+        [Theory]
+        [InlineData("Adobe")]
+        [InlineData("adobe")]
+        [InlineData("ADOBE")]
+        [SupportedOSPlatform("linux")]
+        public async Task ProviderLookups_AreCaseInsensitive(string spelling)
+        {
+            Assert.SkipWhen(_skip, SkipReason);
+
+            var manager = NewManager();
+            var id = await manager.AddCredentialAsync("Adobe", "prod", "Production", "{\"k\":\"v\"}");
+            Assert.True(await RetryHelper.UntilTrueAsync(() => manager.SelectCredentialAsync(id)));
+
+            // The OS backends keyed every lookup on the caller's exact spelling, so a
+            // consumer that worked against the file backend returned nothing here (#49).
+            var listed = Assert.Single(
+                await RetryHelper.UntilAsync(() => manager.ListCredentialsAsync(spelling), r => r.Count() == 1));
+            Assert.Equal(id, listed.AccountId);
+            Assert.Equal("{\"k\":\"v\"}", await manager.GetSelectedCredentialAsync(spelling));
+            Assert.Equal("{\"k\":\"v\"}", await manager.GetCredentialByIdAsync(spelling, id));
+        }
+
         private sealed class FakeAdobeSummaryProvider : ICredentialSummaryProvider
         {
             public string ProviderName => "Adobe";

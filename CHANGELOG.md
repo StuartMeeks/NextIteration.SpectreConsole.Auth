@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Provider-name casing behaved differently on each of the three backends** (#49).
+  `ICredentialManager` documented no case-sensitivity contract, and the implementations
+  disagreed: the file backend matched `OrdinalIgnoreCase`, while the Keychain and libsecret
+  backends keyed every lookup on the caller's exact spelling. A consumer developed against
+  the default file backend that passed a differently-cased provider name worked there and
+  silently returned nothing once `UseKeychain` or `UseKeyring` was set. The contract is now
+  stated on `ICredentialManager` — **provider names are matched case-insensitively and stored
+  as supplied** — and both OS backends honour it by resolving the caller's spelling to the
+  stored one. Resolution rather than normalisation, deliberately: the provider name is part
+  of those backends' storage keys, so lowercasing the key would orphan every item already
+  stored under a mixed-case spelling. One difference is documented rather than fixed — a store
+  holding two spellings of one provider lists both on the file backend and one on the native
+  backends, which the normal path cannot produce.
+
 - **`accounts list` could show a credential as selected that the consumer could not resolve**
   (#48). `selections.json` deserialised into a default ordinal dictionary, so
   `GetSelectedCredentialAsync` missed a selection recorded under a differently-cased provider

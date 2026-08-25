@@ -7,6 +7,25 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
     /// implementation is <see cref="FileCredentialManager"/>, registered
     /// automatically by <c>AddCredentialStore</c>.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Provider names are matched case-insensitively</b> and stored as supplied.
+    /// A credential added as <c>Adobe</c> is found by a lookup for <c>adobe</c>, and
+    /// the spelling the caller used is what <see cref="CredentialSummary.ProviderName"/>
+    /// reports back. Implementations must honour this: it was previously unstated, and
+    /// the three shipped backends disagreed — the file backend matched case-insensitively
+    /// while the Keychain and libsecret backends keyed on the exact spelling, so the same
+    /// call returned a credential on one backend and nothing on another (#49).
+    /// </para>
+    /// <para>
+    /// One documented difference remains between backends. If a store somehow holds two
+    /// spellings of the same provider (<c>Adobe</c> and <c>adobe</c> both added), the file
+    /// backend lists credentials under both, while the OS-native backends resolve to one
+    /// stored spelling and list only that one. Reaching that state requires deliberately
+    /// adding a provider twice under different casing; the normal path cannot, because a
+    /// provider's name comes from a single <c>ICredential.ProviderName</c> constant.
+    /// </para>
+    /// </remarks>
     public interface ICredentialManager
     {
         /// <summary>
