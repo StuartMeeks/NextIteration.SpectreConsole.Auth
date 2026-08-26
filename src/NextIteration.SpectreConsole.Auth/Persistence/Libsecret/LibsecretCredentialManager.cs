@@ -511,17 +511,12 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Libsecret
                 },
                 loadSecrets: false, cancellationToken);
 
-            foreach (var item in items)
-            {
-                var stored = item.Attributes.GetValueOrDefault(AttrProvider);
-                if (!string.IsNullOrEmpty(stored) &&
+            return items
+                .Select(i => i.Attributes.GetValueOrDefault(AttrProvider))
+                .FirstOrDefault(stored =>
+                    !string.IsNullOrEmpty(stored) &&
                     stored.Equals(providerName, StringComparison.OrdinalIgnoreCase))
-                {
-                    return stored;
-                }
-            }
-
-            return providerName;
+                ?? providerName;
         }
 
         /// <summary>
