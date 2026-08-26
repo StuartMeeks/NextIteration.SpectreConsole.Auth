@@ -69,7 +69,7 @@ jobs:
     strategy:
       fail-fast: false        # one platform failing must not hide another's result
       matrix:
-        os: [ ubuntu-latest, windows-latest, macos-latest ]
+        os: [ ubuntu-latest, windows-latest, macos-14, macos-15 ]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:
@@ -86,22 +86,6 @@ jobs:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/Directory.Packages.props', '**/*.csproj') }}
           restore-keys: nuget-${{ runner.os }}-
-
-      # The libsecret backend exercises the Secret Service D-Bus API, which is not
-      # running on a bare ubuntu runner. Without this the tests short-circuit through
-      # the "secret-service-unavailable" probe instead of hitting libsecret. Linux-only;
-      # the macOS leg uses Security.framework and needs nothing.
-      - name: Install and start gnome-keyring-daemon
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gnome-keyring dbus-x11 libsecret-1-0 libsecret-1-dev
-          eval "$(dbus-launch --sh-syntax)"
-          echo "DBUS_SESSION_BUS_ADDRESS=$DBUS_SESSION_BUS_ADDRESS" >> $GITHUB_ENV
-          echo "DBUS_SESSION_BUS_PID=$DBUS_SESSION_BUS_PID" >> $GITHUB_ENV
-          echo -n '' | gnome-keyring-daemon --unlock
-          gnome-keyring-daemon --start --components=secrets &
-          sleep 2
 
       # Tests run across every shipped TFM (STANDARD.md 2.3). No --no-build: this job
       # does not share a filesystem with `build`, and rebuilding is cheaper and less
@@ -121,11 +105,56 @@ jobs:
           path: '**/TestResults/*.coverage'
           if-no-files-found: warn
 
+  # Auth-only fifth job (EXCEPTIONS.md 3.1). The libsecret tests need a Secret Service
+  # daemon, which only exists on one leg of the matrix — so as a guarded step inside `test`
+  # it made `test (ubuntu-latest)` report one result for two unrelated things. Split out,
+  # the matrix leg reports the libsecret tests as skipped (they self-report since #46) and
+  # this job reports them run, so a libsecret regression names itself.
+  test-linux-keyring:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - uses: actions/cache@v6
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Install and start gnome-keyring-daemon
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gnome-keyring dbus-x11 libsecret-1-0 libsecret-1-dev
+          eval "$(dbus-launch --sh-syntax)"
+          echo "DBUS_SESSION_BUS_ADDRESS=$DBUS_SESSION_BUS_ADDRESS" >> $GITHUB_ENV
+          echo "DBUS_SESSION_BUS_PID=$DBUS_SESSION_BUS_PID" >> $GITHUB_ENV
+          echo -n '' | gnome-keyring-daemon --unlock
+          gnome-keyring-daemon --start --components=secrets &
+          sleep 2
+
+      - name: Test
+        run: dotnet test --configuration Release --verbosity normal -- --coverage
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-linux-keyring
+          path: '**/TestResults/*.coverage'
+          if-no-files-found: warn
+
   # THE required status check. Aggregates everything above so the ruleset never has to
   # know the matrix shape. `if: always()` is essential — without it the gate is skipped
   # when a dependency fails, and a skipped check reads as success to branch protection.
   ci:
-    needs: [ build, test ]
+    needs: [ build, test, test-linux-keyring ]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5

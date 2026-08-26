@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **CI now runs three macOS versions and splits the libsecret tests into their own job**
+  (#20, #21). The `test` matrix names `macos-14` and `macos-15` instead of `macos-latest`: this is the only repo with a Security.framework P/Invoke layer, and the
+  alias only ever exercised whichever release it currently points at — the one place an
+  OS-version behaviour change would surface as silently missing credentials rather than a
+  build failure. The `gnome-keyring-daemon` setup moves out of the matrix into a
+  `test-linux-keyring` job, so `test (ubuntu-latest)` no longer reports one result for both
+  the portable tests and the libsecret ones; the matrix leg now shows the libsecret tests
+  skipped and the new job shows them run. Both changes required amending
+  NextIteration.Standards first (its PR #23) rather than editing this workflow locally, which
+  §3.0.1 calls forking rather than fixing.
+
+  `macos-13` was in the first attempt, as #20 suggested, and is not in the result: that
+  runner label no longer schedules. Its job sat queued with no runner assigned for over ten
+  minutes while every other leg finished, so it would have hung each CI run indefinitely
+  rather than adding coverage.
+
 ### Breaking
 
 - **`ICredentialManager` members now take a `CancellationToken`** (#74). Every member gains a
