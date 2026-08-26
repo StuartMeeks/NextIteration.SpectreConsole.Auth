@@ -11,6 +11,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **README review ahead of 2.0.0: two broken snippets and nine stale or missing claims.**
+  Both broken examples were verified by running them, and both replacements verified the same
+  way. The DPAPI section registered the manager by type
+  (`AddSingleton<ICredentialManager, FileCredentialManager>()`), which cannot work — the
+  constructor takes a `string credentialsDirectory` and DI throws *"Unable to resolve service
+  for type 'System.String'"*. The "custom encryption backend" section had the registration
+  order backwards: `AddCredentialStore` registers its own `ICredentialEncryption`, last
+  registration wins, so a backend registered *first* was silently ignored and credentials kept
+  using the default — no error, on a change made specifically to strengthen encryption.
+
+  Also corrected: the libsecret section still advertised KWallet and "any Secret Service
+  implementation" twenty lines above the block saying KWallet is unsupported; that block still
+  blamed the missing cancellable, which #74 disproved; the Contributing section pointed at a
+  closed issue; the shipped `Providers.GitHub` package was missing from the table *while the
+  worked example taught readers to write one from scratch*; and cancellation, `export`/`import`
+  in the features list, the `(unreadable)` marking and export's skip-and-warn behaviour were
+  undocumented.
+
+### Fixed
+
 - **Six Keychain tests could read the store before their writes were visible.** `main` went
   red on `macos-14` with `GetProviderNamesAsync_ReturnsDistinctProviders` reporting
   *"Expected: 2, Actual: 0"* — the same commit having passed that leg minutes earlier on the
