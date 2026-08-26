@@ -314,8 +314,8 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
             Assert.False(selections.ContainsKey("Adobe"));
 
             // And the delete must not disturb an unrelated provider's selection.
-            Assert.True(selections.ContainsKey("Airtable"));
-            Assert.Equal(unrelated, selections["Airtable"]);
+            Assert.True(selections.TryGetValue("Airtable", out var untouched));
+            Assert.Equal(unrelated, untouched);
 
             Assert.Null(await manager.GetSelectedCredentialAsync("Adobe"));
         }

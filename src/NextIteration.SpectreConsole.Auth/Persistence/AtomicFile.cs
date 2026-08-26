@@ -68,11 +68,8 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
                 options.UnixCreateMode = unixMode.Value;
             }
 
-            var stream = new FileStream(tempPath, options);
-            await using (stream.ConfigureAwait(false))
-            {
-                await stream.WriteAsync(bytes, cancellationToken).ConfigureAwait(false);
-            }
+            await using var stream = new FileStream(tempPath, options);
+            await stream.WriteAsync(bytes, cancellationToken).ConfigureAwait(false);
         }
 
         /// <summary>
