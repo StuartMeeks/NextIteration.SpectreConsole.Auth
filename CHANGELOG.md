@@ -47,6 +47,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Three CodeQL alerts introduced by this cycle's changes**, all in code added since 1.1.0.
+  `AtomicFile.WriteTempAsync` held its `FileStream` in a local before an `await using` block,
+  which the analyser could not prove disposed on every path (`cs/local-not-disposed`, the only
+  warning of the three) — it is now an `await using` declaration.
+  `LibsecretCredentialManager.ResolveStoredProviderName` used a filter-then-project loop where
+  LINQ says it plainly (`cs/linq/missed-select`), and a test paired `ContainsKey` with the
+  indexer instead of `TryGetValue` (`cs/inefficient-containskey`).
+
 - **The Keychain backend could see another CLI's credentials** (#55). App scoping was a
   dot-prefix match on the service string, and since the service is `{app}.{provider}` and
   provider names may contain dots, app `com.acme.cli` could not distinguish its own
