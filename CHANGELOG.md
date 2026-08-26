@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Six Keychain tests could read the store before their writes were visible.** `main` went
+  red on `macos-14` with `GetProviderNamesAsync_ReturnsDistinctProviders` reporting
+  *"Expected: 2, Actual: 0"* — the same commit having passed that leg minutes earlier on the
+  PR. `AddCredentialAsync` confirms visibility through an exact service+account query, while
+  `ListCredentialsAsync` and `GetProviderNamesAsync` go through the class-wide query, so one
+  being visible does not imply the other. Fourteen reads in that file already used
+  `RetryHelper`; these six did not. Each now retries on the condition it actually asserts,
+  not merely on something having appeared — the distinction #61 turned on.
+
 ### Changed
 
 - **CI now runs three macOS versions and splits the libsecret tests into their own job**

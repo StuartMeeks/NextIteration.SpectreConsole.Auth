@@ -148,7 +148,11 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
             var manager = NewManager();
             var accountId = await manager.AddCredentialAsync("Adobe", "prod", "Production", "{}");
 
-            var list = (await manager.ListCredentialsAsync("Adobe")).ToList();
+            // Retried like its siblings: AddCredentialAsync confirms visibility through an
+            // exact service+account query, while these reads go through the class-wide
+            // query, so one being visible does not imply the other (#61's pattern).
+            var list = (await RetryHelper.UntilAsync(
+                () => manager.ListCredentialsAsync("Adobe"), r => r.Any(c => c.AccountId == accountId))).ToList();
 
             var credential = Assert.Single(list);
             Assert.Equal(accountId, credential.AccountId);
@@ -167,8 +171,13 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
             _ = await manager.AddCredentialAsync("Adobe", "a1", "Production", "{}");
             _ = await manager.AddCredentialAsync("Airtable", "b1", "Production", "{}");
 
-            var adobe = (await manager.ListCredentialsAsync("Adobe")).ToList();
-            var airtable = (await manager.ListCredentialsAsync("Airtable")).ToList();
+            // Retried like its siblings: AddCredentialAsync confirms visibility through an
+            // exact service+account query, while these reads go through the class-wide
+            // query, so one being visible does not imply the other (#61's pattern).
+            var adobe = (await RetryHelper.UntilAsync(
+                () => manager.ListCredentialsAsync("Adobe"), r => r.Count() == 1)).ToList();
+            var airtable = (await RetryHelper.UntilAsync(
+                () => manager.ListCredentialsAsync("Airtable"), r => r.Count() == 1)).ToList();
 
             var adobeCredential = Assert.Single(adobe);
             var airtableCredential = Assert.Single(airtable);
@@ -255,7 +264,12 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
 
             _ = await manager.GetCredentialByIdAsync("Adobe", otherId);
 
-            var listings = (await manager.ListCredentialsAsync("Adobe")).ToList();
+            // Retried like its siblings: AddCredentialAsync confirms visibility through an
+            // exact service+account query, while these reads go through the class-wide
+            // query, so one being visible does not imply the other (#61's pattern).
+            var listings = (await RetryHelper.UntilAsync(
+                () => manager.ListCredentialsAsync("Adobe"),
+                r => r.Count() == 2 && r.Any(c => c.IsSelected))).ToList();
             Assert.True(listings.Single(c => c.AccountId == selectedId).IsSelected);
             Assert.False(listings.Single(c => c.AccountId == otherId).IsSelected);
         }
@@ -282,7 +296,11 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
             var accountId = await manager.AddCredentialAsync("Adobe", "prod", "Production", "{}");
 
             var deleted = await RetryHelper.UntilTrueAsync(() => manager.DeleteCredentialAsync(accountId));
-            var list = (await manager.ListCredentialsAsync("Adobe")).ToList();
+            // Retried like its siblings: AddCredentialAsync confirms visibility through an
+            // exact service+account query, while these reads go through the class-wide
+            // query, so one being visible does not imply the other (#61's pattern).
+            var list = (await RetryHelper.UntilAsync(
+                () => manager.ListCredentialsAsync("Adobe"), r => !r.Any())).ToList();
 
             Assert.True(deleted);
             Assert.Empty(list);
@@ -334,7 +352,12 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
             _ = await manager.AddCredentialAsync("Adobe", "a2", "Sandbox", "{}");
             _ = await manager.AddCredentialAsync("Airtable", "b1", "Production", "{}");
 
-            var names = (await manager.GetProviderNamesAsync()).ToList();
+            // This is the read that actually failed on macos-14, "Expected: 2, Actual: 0",
+            // and the one most exposed to the lag: GetProviderNamesAsync goes through the
+            // class-wide query while the adds confirmed themselves through an exact
+            // service+account query.
+            var names = (await RetryHelper.UntilAsync(
+                () => manager.GetProviderNamesAsync(), r => r.Count() == 2)).ToList();
 
             Assert.Equal(2, names.Count);
             Assert.Contains("Adobe", names);
@@ -415,7 +438,11 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Persistence
             var manager = NewManager([summaryProvider]);
 
             _ = await manager.AddCredentialAsync("Adobe", "prod", "Production", "{\"apiKey\":\"xyz\"}");
-            var list = (await manager.ListCredentialsAsync("Adobe")).ToList();
+            // Retried like its siblings: AddCredentialAsync confirms visibility through an
+            // exact service+account query, while these reads go through the class-wide
+            // query, so one being visible does not imply the other (#61's pattern).
+            var list = (await RetryHelper.UntilAsync(
+                () => manager.ListCredentialsAsync("Adobe"), r => r.Count() == 1)).ToList();
 
             var credential = Assert.Single(list);
             var field = Assert.Single(credential.DisplayFields);
