@@ -11,6 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A third broken README snippet, missed by the first review pass.** The consumer sample —
+  the one showing how to use a token from a command handler, so among the most-copied code in
+  the file — does not compile against the Spectre.Console.Cli version this package depends on:
+  `AsyncCommand.ExecuteAsync` is `protected` and takes `(CommandContext, CancellationToken)`,
+  not a `public` `(CommandContext)`. Corrected and compiled. The install block also gained the
+  `Providers.GitHub` package, which the previous pass added to the table but not there, and a
+  version-pairing table was added: the providers cap at the major boundary, so `2.x` needs
+  `2.x`, and the cap exists to turn what would be a runtime `MissingMethodException` into a
+  restore-time resolution error.
+
+### Fixed
+
 - **README review ahead of 2.0.0: two broken snippets and nine stale or missing claims.**
   Both broken examples were verified by running them, and both replacements verified the same
   way. The DPAPI section registered the manager by type
