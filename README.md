@@ -14,13 +14,14 @@ Stop copy-pasting the same `~/.app/creds.json` + AES boilerplate into every CLI 
 
 ## Features
 
-- **`accounts` command branch** — `add`, `list`, `select`, `delete` wired into your existing `CommandApp` with a single call.
+- **`accounts` command branch** — `add`, `list`, `select`, `delete`, `export`, `import` wired into your existing `CommandApp` with a single call.
 - **AES-GCM authenticated encryption** — tamper detection on every read, no padding-oracle surface.
 - **Hardened storage** — Unix mode `0600` on credential files, Windows ACL stripped of inheritance so only the current user + SYSTEM can read the credentials directory.
 - **Atomic writes** — crash mid-write never leaves a half-written credential or keystore on disk.
 - **Provider-aware list rendering** — your `accounts list` output shows provider-specific columns (masked token, base URL, actor, whatever you need) instead of a flat table.
 - **Extensible** — bring your own provider by implementing three small interfaces. Adobe, Airtable, and SoftwareOne provider packages ship separately.
 - **DPAPI option on Windows** — swap the default cross-platform backend for Windows DPAPI with one factory call.
+- **Cancellable throughout** — every `ICredentialManager` member takes a `CancellationToken`, wired down to a `GCancellable` on the libsecret backend so a prompting secret store cannot wedge your CLI.
 - **Zero compiler warnings, fully documented public surface** — `<GenerateDocumentationFile>` on, analyzers on, `TreatWarningsAsErrors` on.
 
 ---
@@ -106,7 +107,7 @@ public sealed class SyncCommand(AdobeAuthenticationService auth) : AsyncCommand
 | Command | Description |
 |---|---|
 | `accounts add` | Interactive: pick a provider, name the credential, fill in provider-specific fields. |
-| `accounts list` | Table of stored credentials, grouped by provider, with provider-specific columns (masked tokens, URLs, etc.). |
+| `accounts list` | Table of stored credentials, grouped by provider, with provider-specific columns (masked tokens, URLs, etc.). Entries whose payload cannot be read are still listed, marked `(unreadable)`, so you can see and remove them. |
 | `accounts select [id]` | Mark one credential as the active one for its provider. Subsequent `AuthenticateAsync()` calls use it. |
 | `accounts delete [id] [--force]` | Remove a credential. Clears the selection if it pointed at the deleted entry. |
 | `accounts export <file> [--force]` | Write every credential to a single passphrase-encrypted archive. |
@@ -130,6 +131,7 @@ $ my-cli accounts import credentials.bundle
 - **Passphrase-only.** The archive is AES-256-GCM encrypted with a PBKDF2-derived key (600,000 iterations, random per-export salt). There is no plaintext export. For scripting, read the passphrase from an environment variable with `--passphrase-env MY_VAR` instead of being prompted. On Unix the archive file is written `0600`.
 - **Conflicts.** An imported credential is matched to an existing one on *(provider, account name, environment)*. On a match you're prompted to skip or overwrite; pass `--on-conflict skip` or `--on-conflict overwrite` to decide up front (a non-interactive run with no flag skips).
 - **Fidelity.** Account IDs and which credential is selected are preserved. Original creation timestamps are preserved on the file and libsecret backends; the macOS Keychain assigns its own, so imported items show a fresh timestamp there.
+- **A credential that cannot be read is left out, not exported blank.** If the store holds an entry this machine's keystore can no longer decrypt — a credentials directory copied from another machine, say — `accounts export` skips it and tells you how many it skipped. The archive is then genuinely incomplete, which is why it says so: writing an empty payload instead would restore *over* a real secret at the far end. `accounts list` marks the same entries `(unreadable)` so you can see which they are.
 
 > The archive contains **every stored secret**, protected only by your passphrase. Choose a strong one and treat the file as sensitive.
 
@@ -186,7 +188,14 @@ For cryptographically stronger isolation:
 
 ## Extending with a custom provider
 
-Three interfaces to implement, one DI registration. Here's a GitHub PAT provider end-to-end:
+Two interfaces you must implement — `ICredentialCollector` and an
+`IAuthenticationService<,>` — plus the credential and token types they work with, and an
+optional `ICredentialSummaryProvider` for the `accounts list` columns. One DI registration.
+
+The worked example below builds a GitHub PAT provider because it is the smallest useful one.
+Note that it already ships as
+[`…Providers.GitHub`](https://www.nuget.org/packages/NextIteration.SpectreConsole.Auth.Providers.GitHub/),
+so take this as the pattern rather than as something you need to write:
 
 ```csharp
 using System.Text.Json;
@@ -282,6 +291,7 @@ See the companion [provider packages repo](https://github.com/StuartMeeks/NextIt
 | [NextIteration.SpectreConsole.Auth.Providers.Adobe](https://www.nuget.org/packages/NextIteration.SpectreConsole.Auth.Providers.Adobe/) | Adobe IMS | OAuth2 client-credentials |
 | [NextIteration.SpectreConsole.Auth.Providers.Airtable](https://www.nuget.org/packages/NextIteration.SpectreConsole.Auth.Providers.Airtable/) | Airtable | Personal access token (pass-through) |
 | [NextIteration.SpectreConsole.Auth.Providers.SoftwareOne](https://www.nuget.org/packages/NextIteration.SpectreConsole.Auth.Providers.SoftwareOne/) | SoftwareOne | API token (pass-through, actor-scoped) |
+| [NextIteration.SpectreConsole.Auth.Providers.GitHub](https://www.nuget.org/packages/NextIteration.SpectreConsole.Auth.Providers.GitHub/) | GitHub | Personal access token (pass-through) |
 
 ---
 
@@ -289,10 +299,9 @@ See the companion [provider packages repo](https://github.com/StuartMeeks/NextIt
 
 ### Linux libsecret backend (experimental)
 
-On Linux you can opt into storing credentials directly in the user's
-keyring (GNOME Keyring, KWallet's shim, any Secret Service implementation)
-via libsecret. Each credential becomes a Secret Service item, visible and
-manageable via Seahorse/KWalletManager.
+On Linux you can opt into storing credentials directly in the user's GNOME
+Keyring via libsecret. Each credential becomes a Secret Service item, visible
+and manageable via Seahorse.
 
 ```csharp
 services.AddCredentialStore(opts =>
@@ -303,9 +312,11 @@ services.AddCredentialStore(opts =>
 ```
 
 > ⚠️ **Experimental.** Requires a running Secret Service daemon — headless
-> containers and SSH-only servers typically don't have one, and operations
-> will throw with a clear message. `UseKeyring = true` on non-Linux platforms
-> throws `PlatformNotSupportedException` at registration time.
+> containers and SSH-only servers typically don't have one. Operations then
+> throw with a clear message, *unless* the daemon is present but wants to
+> prompt, in which case see the KWallet note below. `UseKeyring = true` on
+> non-Linux platforms throws `PlatformNotSupportedException` at registration
+> time.
 
 **Validated against GNOME Keyring only.** KWallet's Secret Service shim
 (`ksecretd`) was tested and does *not* work unattended (see
@@ -315,11 +326,15 @@ services.AddCredentialStore(opts =>
   `KeyringCollection = "session"` fails outright with *"No such object path
   `/org/freedesktop/secrets/aliases/session`"*.
 - With the default collection it prompts to unlock the wallet. In a desktop KDE
-  session a user can answer that; with no GUI the call **blocks indefinitely**,
-  because libsecret's synchronous API is invoked without a cancellable.
+  session a user can answer that; with no GUI the call **blocks indefinitely** —
+  and cancelling does not rescue it. `ksecretd` emits the prompt's `Completed`
+  signal with an `ao` payload where libsecret expects `o`, so libsecret abandons
+  its prompt task *"without ever returning"* and the nested main loop never
+  exits. The cancellation fires and cannot reach a task libsecret has already
+  dropped, so this is an upstream incompatibility rather than something this
+  backend can work around.
 
-Treat KWallet as unsupported until that is addressed. Other Secret Service
-implementations are untested.
+Treat KWallet as unsupported. Other Secret Service implementations are untested.
 
 `UseKeyring` and `UseKeychain` are mutually exclusive — setting both throws.
 The file-based backend remains the default when neither is set.
@@ -353,12 +368,23 @@ reverse-DNS string like `com.mycompany.my-cli`.
 
 ### Switching to DPAPI on Windows
 
-`CredentialEncryptionFactory.Create(path)` returns the cross-platform backend by default. For DPAPI-backed storage on Windows:
+`CredentialEncryptionFactory.Create(path)` returns the cross-platform backend by default. For DPAPI-backed storage on Windows, register both services yourself instead of calling `AddCredentialStore`:
 
 ```csharp
+var credentialsDirectory = Path.Combine(userProfile, ".my-cli", "credentials");
+
 services.AddSingleton<ICredentialEncryption>(_ => CredentialEncryptionFactory.CreateDpapi());
-services.AddSingleton<ICredentialManager, FileCredentialManager>();
+services.AddSingleton<ICredentialManager>(sp => new FileCredentialManager(
+    sp.GetRequiredService<ICredentialEncryption>(),
+    credentialsDirectory,
+    sp.GetServices<ICredentialSummaryProvider>()));
 ```
+
+`FileCredentialManager` takes its directory as a constructor argument, so it cannot be
+registered by type — `AddSingleton<ICredentialManager, FileCredentialManager>()` throws
+`Unable to resolve service for type 'System.String'` at resolution time. Passing
+`GetServices<ICredentialSummaryProvider>()` is what keeps your provider columns in
+`accounts list`; omit it and the table falls back to the generic columns.
 
 ### Multiple credentials per provider
 
@@ -366,7 +392,19 @@ You can store as many credentials per provider as you like. `accounts select` ac
 
 ### Custom encryption backend
 
-Implement `ICredentialEncryption` and register it before calling `AddCredentialStore`. `FileCredentialManager` will pick up whatever backend is registered.
+Implement `ICredentialEncryption` and register it **after** `AddCredentialStore`:
+
+```csharp
+services.AddCredentialStore(opts => { /* ... */ });
+services.AddSingleton<ICredentialEncryption>(_ => new MyEncryption());   // must come second
+```
+
+Order matters and getting it wrong fails **silently**. `AddCredentialStore` registers its own
+`ICredentialEncryption`, and the last registration of a service type is the one resolved — so
+a custom backend registered *first* is quietly ignored and your credentials are encrypted with
+the default one. There is no error to tell you, which is exactly the wrong failure mode for a
+change made to strengthen encryption. Register after, and verify with
+`provider.GetRequiredService<ICredentialEncryption>().GetType()` if in doubt.
 
 ---
 
@@ -386,7 +424,8 @@ Everything else is transitive.
 
 ## Contributing
 
-Issues and PRs welcome. Outstanding hardening is tracked in [GitHub issues](https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/issues) — currently the libsecret backend blocking on a Secret Service prompt ([#74](https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/issues/74)).
+Issues and PRs welcome. Outstanding work is tracked in [GitHub issues](https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/issues); there is
+none open at the time of writing.
 
 When contributing code, please keep the zero-warning, fully-documented public surface. `TreatWarningsAsErrors` is on for a reason.
 
