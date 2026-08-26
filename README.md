@@ -38,9 +38,24 @@ Pair it with one or more provider packages (or write your own — see [Extending
 dotnet add package NextIteration.SpectreConsole.Auth.Providers.Adobe
 dotnet add package NextIteration.SpectreConsole.Auth.Providers.Airtable
 dotnet add package NextIteration.SpectreConsole.Auth.Providers.SoftwareOne
+dotnet add package NextIteration.SpectreConsole.Auth.Providers.GitHub
 ```
 
 Targets `net8.0` and `net10.0`.
+
+**Pair matching major versions.** Each provider package depends on this one through a
+major-capped range, so `2.x` providers require `2.x` of this package and NuGet will refuse to
+mix them:
+
+| This package | Provider packages |
+|---|---|
+| `2.x` | `2.x` |
+| `1.x` | `1.0.1`+ |
+
+That refusal is deliberate and worth understanding. `ICredentialManager` changed shape in
+2.0.0, and the providers call into it — so a `1.x` provider assembly running against `2.x` of
+this package would fail at *runtime* with `MissingMethodException`. The version cap turns that
+into a resolution error you read at restore time instead.
 
 ---
 
@@ -91,7 +106,7 @@ And from inside any of your command handlers:
 ```csharp
 public sealed class SyncCommand(AdobeAuthenticationService auth) : AsyncCommand
 {
-    public override async Task<int> ExecuteAsync(CommandContext context)
+    protected override async Task<int> ExecuteAsync(CommandContext context, CancellationToken cancellationToken)
     {
         var token = await auth.AuthenticateAsync();
         // use token.GetAuthorizationHeader() on outgoing requests
