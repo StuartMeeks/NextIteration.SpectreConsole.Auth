@@ -9,6 +9,15 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Infrastructure
     /// That is a store-visibility timing artifact of the tests running side by
     /// side, not a defect in the manager, so it is closed here rather than by
     /// making the production delete path slower.
+    /// <para>
+    /// The same concurrency also makes the store occasionally <b>reject</b> a query
+    /// outright rather than merely answer it late — <c>SecItemCopyMatching</c> returning
+    /// <c>OSStatus -67701</c> on a macOS runner, surfacing as an
+    /// <see cref="InvalidOperationException"/> from the backend. Both helpers therefore
+    /// treat such an exception as a failed attempt and try again, but <b>rethrow it if the
+    /// final attempt still fails</b>. A persistent error still fails the test with its real
+    /// message; only a transient one is ridden out.
+    /// </para>
     /// </summary>
     internal static class RetryHelper
     {
@@ -25,9 +34,18 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Infrastructure
         {
             for (var attempt = 1; attempt <= maxAttempts; attempt++)
             {
-                if (await action())
+                try
                 {
-                    return true;
+                    if (await action())
+                    {
+                        return true;
+                    }
+                }
+                catch (InvalidOperationException) when (attempt < maxAttempts)
+                {
+                    // Transient store rejection; fall through to the delay and retry. The
+                    // `when` guard is what keeps this honest — on the final attempt the
+                    // exception is not caught, so a persistent failure still surfaces.
                 }
 
                 if (attempt < maxAttempts)
@@ -54,11 +72,29 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Infrastructure
             int maxAttempts = 20,
             int delayMs = 25)
         {
-            var result = await action();
-            for (var attempt = 1; !predicate(result) && attempt < maxAttempts; attempt++)
+            T result = default!;
+            var satisfied = false;
+
+            for (var attempt = 1; attempt <= maxAttempts; attempt++)
             {
+                try
+                {
+                    result = await action();
+                    satisfied = predicate(result);
+                }
+                catch (InvalidOperationException) when (attempt < maxAttempts)
+                {
+                    // Transient store rejection — see the type remarks. Not caught on the
+                    // final attempt, so a persistent failure still reaches the test.
+                    satisfied = false;
+                }
+
+                if (satisfied || attempt == maxAttempts)
+                {
+                    break;
+                }
+
                 await Task.Delay(delayMs);
-                result = await action();
             }
 
             return result;
