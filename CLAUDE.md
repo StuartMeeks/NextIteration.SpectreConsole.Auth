@@ -9,16 +9,23 @@ providers, then get `accounts add/list/select/delete` wired into their existing
 OS-native stores — macOS Keychain, Linux libsecret, Windows DPAPI.
 
 The provider packages in `NextIteration.SpectreConsole.Auth.Providers` consume this one
-through a major-capped range — the 1.0.1 providers all depend on `[1.0.1, 2.0.0)` — so a
-breaking change to `ICredentialCollector` or `ICredentialSummaryProvider` is a downstream
-event, not a local one.
+through a major-capped range — the 2.0.0 providers all depend on `[2.0.0, 3.0.0)` — so a
+breaking change to `ICredentialCollector`, `ICredentialSummaryProvider`,
+`IAuthenticationService<,>` or `ICredentialManager` is a downstream event, not a local one.
+All four of those are provider-implemented; only `ICredentialSummaryProvider` was left
+unchanged by 2.0.0.
 
 Note what that cap does and does not do. It sits at the **major** boundary, so it will not
-protect those packages from a break shipped in a 1.x release: any 1.x satisfies the range
-and gets resolved. The only thing keeping the providers working is not breaking those two
-interfaces within 1.x. (This note previously recorded the providers' pre-1.0 cap of
-`[0.7.1,1.0.0)`, which excluded every 1.x release of this package; the providers widened it
-when they went 1.0.x, and this note was not updated with them.)
+protect those packages from a break shipped in a 2.x release: any 2.x satisfies the range and
+gets resolved. What it *does* protect against was demonstrated by the 2.0.0 release itself —
+the providers call `ICredentialManager`, so a 1.x provider assembly against 2.x would have
+failed at runtime with `MissingMethodException`, and the cap turned that into a restore-time
+resolution error instead. That is also why the two repos were released in lockstep.
+
+This line has now been wrong twice: it recorded the pre-1.0 cap of `[0.7.1,1.0.0)` after the
+providers went 1.0.x, and `[1.0.1, 2.0.0)` after they went 2.0.0. It is stale by construction
+whenever the providers take a major, so check it against their
+`Directory.Packages.props` rather than trusting it.
 
 ## Things that are easy to get wrong here
 
