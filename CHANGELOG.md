@@ -9,77 +9,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-
-- **The test retry helper now rides out a transient store rejection, not just a late answer.**
-  `main` went red on `macos-14` with `SecItemCopyMatching failed: OSStatus -67701`; re-running
-  the identical commit passed. `RetryHelper` retried on a false *result* but did not catch
-  exceptions, so a store that rejected a query outright — rather than answering it late —
-  escaped the loop on the first attempt. Both helpers now treat an `InvalidOperationException`
-  as a failed attempt, guarded by `when (attempt < maxAttempts)` so the final attempt is not
-  caught: a persistent failure still fails the test with its real message, only a transient one
-  is ridden out. `RetryHelper` has its own tests now, since a retry helper that swallowed a
-  persistent failure would make every test using it incapable of failing.
-
-- **A third broken README snippet, missed by the first review pass.** The consumer sample —
-  the one showing how to use a token from a command handler, so among the most-copied code in
-  the file — does not compile against the Spectre.Console.Cli version this package depends on:
-  `AsyncCommand.ExecuteAsync` is `protected` and takes `(CommandContext, CancellationToken)`,
-  not a `public` `(CommandContext)`. Corrected and compiled. The install block also gained the
-  `Providers.GitHub` package, which the previous pass added to the table but not there, and a
-  version-pairing table was added: the providers cap at the major boundary, so `2.x` needs
-  `2.x`, and the cap exists to turn what would be a runtime `MissingMethodException` into a
-  restore-time resolution error.
-
-### Fixed
-
-- **README review ahead of 2.0.0: two broken snippets and nine stale or missing claims.**
-  Both broken examples were verified by running them, and both replacements verified the same
-  way. The DPAPI section registered the manager by type
-  (`AddSingleton<ICredentialManager, FileCredentialManager>()`), which cannot work — the
-  constructor takes a `string credentialsDirectory` and DI throws *"Unable to resolve service
-  for type 'System.String'"*. The "custom encryption backend" section had the registration
-  order backwards: `AddCredentialStore` registers its own `ICredentialEncryption`, last
-  registration wins, so a backend registered *first* was silently ignored and credentials kept
-  using the default — no error, on a change made specifically to strengthen encryption.
-
-  Also corrected: the libsecret section still advertised KWallet and "any Secret Service
-  implementation" twenty lines above the block saying KWallet is unsupported; that block still
-  blamed the missing cancellable, which #74 disproved; the Contributing section pointed at a
-  closed issue; the shipped `Providers.GitHub` package was missing from the table *while the
-  worked example taught readers to write one from scratch*; and cancellation, `export`/`import`
-  in the features list, the `(unreadable)` marking and export's skip-and-warn behaviour were
-  undocumented.
-
-### Fixed
-
-- **Six Keychain tests could read the store before their writes were visible.** `main` went
-  red on `macos-14` with `GetProviderNamesAsync_ReturnsDistinctProviders` reporting
-  *"Expected: 2, Actual: 0"* — the same commit having passed that leg minutes earlier on the
-  PR. `AddCredentialAsync` confirms visibility through an exact service+account query, while
-  `ListCredentialsAsync` and `GetProviderNamesAsync` go through the class-wide query, so one
-  being visible does not imply the other. Fourteen reads in that file already used
-  `RetryHelper`; these six did not. Each now retries on the condition it actually asserts,
-  not merely on something having appeared — the distinction #61 turned on.
-
-### Changed
-
-- **CI now runs three macOS versions and splits the libsecret tests into their own job**
-  (#20, #21). The `test` matrix names `macos-14` and `macos-15` instead of `macos-latest`: this is the only repo with a Security.framework P/Invoke layer, and the
-  alias only ever exercised whichever release it currently points at — the one place an
-  OS-version behaviour change would surface as silently missing credentials rather than a
-  build failure. The `gnome-keyring-daemon` setup moves out of the matrix into a
-  `test-linux-keyring` job, so `test (ubuntu-latest)` no longer reports one result for both
-  the portable tests and the libsecret ones; the matrix leg now shows the libsecret tests
-  skipped and the new job shows them run. Both changes required amending
-  NextIteration.Standards first (its PR #23) rather than editing this workflow locally, which
-  §3.0.1 calls forking rather than fixing.
-
-  `macos-13` was in the first attempt, as #20 suggested, and is not in the result: that
-  runner label no longer schedules. Its job sat queued with no runner assigned for over ten
-  minutes while every other leg finished, so it would have hung each CI run indefinitely
-  rather than adding coverage.
-
 ### Breaking
 
 - **`ICredentialCollector.CollectAsync()` now takes a `CancellationToken`.** Callers keep
@@ -130,6 +59,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **CI now runs three macOS versions and splits the libsecret tests into their own job**
+  (#20, #21). The `test` matrix names `macos-14` and `macos-15` instead of `macos-latest`: this is the only repo with a Security.framework P/Invoke layer, and the
+  alias only ever exercised whichever release it currently points at — the one place an
+  OS-version behaviour change would surface as silently missing credentials rather than a
+  build failure. The `gnome-keyring-daemon` setup moves out of the matrix into a
+  `test-linux-keyring` job, so `test (ubuntu-latest)` no longer reports one result for both
+  the portable tests and the libsecret ones; the matrix leg now shows the libsecret tests
+  skipped and the new job shows them run. Both changes required amending
+  NextIteration.Standards first (its PR #23) rather than editing this workflow locally, which
+  §3.0.1 calls forking rather than fixing.
+
+  `macos-13` was in the first attempt, as #20 suggested, and is not in the result: that
+  runner label no longer schedules. Its job sat queued with no runner assigned for over ten
+  minutes while every other leg finished, so it would have hung each CI run indefinitely
+  rather than adding coverage.
+
 - **The libsecret backend is now documented as GNOME Keyring only** (#19). It was described
   as working with "GNOME Keyring, KWallet's shim, any Secret Service implementation", which
   testing disproved. KWallet's shim (`ksecretd`) fails unattended in two distinct ways: it does
@@ -142,6 +87,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   separately in #74.
 
 ### Fixed
+
+- **The test retry helper now rides out a transient store rejection, not just a late answer.**
+  `main` went red on `macos-14` with `SecItemCopyMatching failed: OSStatus -67701`; re-running
+  the identical commit passed. `RetryHelper` retried on a false *result* but did not catch
+  exceptions, so a store that rejected a query outright — rather than answering it late —
+  escaped the loop on the first attempt. Both helpers now treat an `InvalidOperationException`
+  as a failed attempt, guarded by `when (attempt < maxAttempts)` so the final attempt is not
+  caught: a persistent failure still fails the test with its real message, only a transient one
+  is ridden out. `RetryHelper` has its own tests now, since a retry helper that swallowed a
+  persistent failure would make every test using it incapable of failing.
+
+- **A third broken README snippet, missed by the first review pass.** The consumer sample —
+  the one showing how to use a token from a command handler, so among the most-copied code in
+  the file — does not compile against the Spectre.Console.Cli version this package depends on:
+  `AsyncCommand.ExecuteAsync` is `protected` and takes `(CommandContext, CancellationToken)`,
+  not a `public` `(CommandContext)`. Corrected and compiled. The install block also gained the
+  `Providers.GitHub` package, which the previous pass added to the table but not there, and a
+  version-pairing table was added: the providers cap at the major boundary, so `2.x` needs
+  `2.x`, and the cap exists to turn what would be a runtime `MissingMethodException` into a
+  restore-time resolution error.
+
+- **README review ahead of 2.0.0: two broken snippets and nine stale or missing claims.**
+  Both broken examples were verified by running them, and both replacements verified the same
+  way. The DPAPI section registered the manager by type
+  (`AddSingleton<ICredentialManager, FileCredentialManager>()`), which cannot work — the
+  constructor takes a `string credentialsDirectory` and DI throws *"Unable to resolve service
+  for type 'System.String'"*. The "custom encryption backend" section had the registration
+  order backwards: `AddCredentialStore` registers its own `ICredentialEncryption`, last
+  registration wins, so a backend registered *first* was silently ignored and credentials kept
+  using the default — no error, on a change made specifically to strengthen encryption.
+
+  Also corrected: the libsecret section still advertised KWallet and "any Secret Service
+  implementation" twenty lines above the block saying KWallet is unsupported; that block still
+  blamed the missing cancellable, which #74 disproved; the Contributing section pointed at a
+  closed issue; the shipped `Providers.GitHub` package was missing from the table *while the
+  worked example taught readers to write one from scratch*; and cancellation, `export`/`import`
+  in the features list, the `(unreadable)` marking and export's skip-and-warn behaviour were
+  undocumented.
+
+- **Six Keychain tests could read the store before their writes were visible.** `main` went
+  red on `macos-14` with `GetProviderNamesAsync_ReturnsDistinctProviders` reporting
+  *"Expected: 2, Actual: 0"* — the same commit having passed that leg minutes earlier on the
+  PR. `AddCredentialAsync` confirms visibility through an exact service+account query, while
+  `ListCredentialsAsync` and `GetProviderNamesAsync` go through the class-wide query, so one
+  being visible does not imply the other. Fourteen reads in that file already used
+  `RetryHelper`; these six did not. Each now retries on the condition it actually asserts,
+  not merely on something having appeared — the distinction #61 turned on.
 
 - **Three CodeQL alerts introduced by this cycle's changes**, all in code added since 1.1.0.
   `AtomicFile.WriteTempAsync` held its `FileStream` in a local before an `await using` block,
@@ -340,7 +332,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ICredentialManager.ExportCredentialsAsync` is documented accordingly: implementations **must**
   omit a credential they cannot read rather than return it with an empty payload, and the returned
   count can therefore be lower than the number stored.
-
 ## [1.1.0] — 2026-08-24
 
 One behaviour fix, one additive public member, three documentation fixes. Credentials the local
