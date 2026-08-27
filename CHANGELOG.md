@@ -72,6 +72,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking
 
+- **`IAuthenticationService<,>` members now take a `CancellationToken`.** All three —
+  `AuthenticateAsync()`, `AuthenticateAsync(credential)` and `ValidateTokenAsync(token)` —
+  gain a trailing `CancellationToken cancellationToken = default`. Callers keep compiling;
+  the provider packages, which implement this interface, must update their signatures.
+
+  Done in the same release as the `ICredentialManager` change deliberately. This is the layer
+  that talks to the network — an OAuth2 token endpoint, a validation call — so it is where an
+  unbounded wait is most likely and least recoverable. Shipping cancellation on the storage
+  layer, which is local and fast, while leaving the network layer uncancellable would have put
+  it on the wrong half; and because both interfaces are provider-implemented, doing them apart
+  would have cost a second major version for no benefit.
+
+  The README's worked provider example is updated to match and is compiled verbatim against
+  the new interface, since it is the pattern the provider packages are built from.
+
 - **`ICredentialManager` members now take a `CancellationToken`** (#74). Every member gains a
   trailing `CancellationToken cancellationToken = default`. Existing *callers* keep compiling —
   the parameter is optional — but any external **implementation** of the interface must update

@@ -108,7 +108,7 @@ public sealed class SyncCommand(AdobeAuthenticationService auth) : AsyncCommand
 {
     protected override async Task<int> ExecuteAsync(CommandContext context, CancellationToken cancellationToken)
     {
-        var token = await auth.AuthenticateAsync();
+        var token = await auth.AuthenticateAsync(cancellationToken);
         // use token.GetAuthorizationHeader() on outgoing requests
         return 0;
     }
@@ -242,18 +242,18 @@ public sealed class GitHubToken : IToken
 public sealed class GitHubAuthenticationService(ICredentialManager manager)
     : IAuthenticationService<GitHubCredential, GitHubToken>
 {
-    public async Task<GitHubToken> AuthenticateAsync()
+    public async Task<GitHubToken> AuthenticateAsync(CancellationToken cancellationToken = default)
     {
-        var json = await manager.GetSelectedCredentialAsync(GitHubCredential.ProviderName)
+        var json = await manager.GetSelectedCredentialAsync(GitHubCredential.ProviderName, cancellationToken)
             ?? throw new InvalidOperationException("No GitHub credential selected");
         var credential = JsonSerializer.Deserialize<GitHubCredential>(json)!;
-        return await AuthenticateAsync(credential);
+        return await AuthenticateAsync(credential, cancellationToken);
     }
 
-    public Task<GitHubToken> AuthenticateAsync(GitHubCredential credential) =>
+    public Task<GitHubToken> AuthenticateAsync(GitHubCredential credential, CancellationToken cancellationToken = default) =>
         Task.FromResult(new GitHubToken { AccessToken = credential.PersonalAccessToken });
 
-    public Task<bool> ValidateTokenAsync(GitHubToken token) =>
+    public Task<bool> ValidateTokenAsync(GitHubToken token, CancellationToken cancellationToken = default) =>
         Task.FromResult(!token.IsExpired);
 }
 
