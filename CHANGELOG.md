@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The test retry helper now rides out a transient store rejection, not just a late answer.**
+  `main` went red on `macos-14` with `SecItemCopyMatching failed: OSStatus -67701`; re-running
+  the identical commit passed. `RetryHelper` retried on a false *result* but did not catch
+  exceptions, so a store that rejected a query outright — rather than answering it late —
+  escaped the loop on the first attempt. Both helpers now treat an `InvalidOperationException`
+  as a failed attempt, guarded by `when (attempt < maxAttempts)` so the final attempt is not
+  caught: a persistent failure still fails the test with its real message, only a transient one
+  is ridden out. `RetryHelper` has its own tests now, since a retry helper that swallowed a
+  persistent failure would make every test using it incapable of failing.
+
 - **A third broken README snippet, missed by the first review pass.** The consumer sample —
   the one showing how to use a token from a command handler, so among the most-copied code in
   the file — does not compile against the Spectre.Console.Cli version this package depends on:
