@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] — 2026-08-28
+
+Major release. **Three provider-facing interfaces gain a `CancellationToken`** —
+`ICredentialManager`, `IAuthenticationService<,>` and `ICredentialCollector`. Callers keep
+compiling, since every added parameter is optional; **implementations must update their
+signatures**, which is why the provider packages are re-cut alongside this release. They are
+capped at the major boundary, so a 1.x provider cannot resolve against 2.0.0 — that refusal is
+deliberate, and turns what would be a runtime `MissingMethodException` into a restore-time
+error.
+
+Doing all three in one major was the point: split across releases they would have cost three.
+
+Beyond the API, this release is mostly the output of a full adversarial review of the
+codebase. The findings worth calling out: two concurrent first runs could **silently destroy
+one set of credentials**; the libsecret backend reported a **successful delete when nothing
+was deleted**; the Keychain backend could **see and delete another CLI's credentials**; and a
+credential the local keystore could no longer open would **vanish from `accounts list`** or
+take the whole listing down with it. Several test-integrity defects are fixed too, including a
+libsecret suite that disabled itself whenever the code it tested regressed.
+
 ### Breaking
 
 - **`ICredentialCollector.CollectAsync()` now takes a `CancellationToken`.** Callers keep
@@ -827,7 +847,8 @@ Consumers needed a way to read a specific stored credential's secret at runtime 
 - SourceLink, deterministic builds, embedded symbols, published symbol packages.
 - `TreatWarningsAsErrors=true`, `AnalysisLevel=latest` — zero-warning public API.
 
-[Unreleased]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/releases/tag/v2.0.0
 [1.1.0]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/releases/tag/v1.1.0
 [1.0.1]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/releases/tag/v1.0.1
 [1.0.0]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/releases/tag/v1.0.0
