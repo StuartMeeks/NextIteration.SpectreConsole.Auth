@@ -17,6 +17,12 @@ namespace NextIteration.SpectreConsole.Auth.Commands
         /// Prompts the user for the credential details and returns the serialized
         /// credential JSON together with the selected environment name.
         /// </summary>
-        Task<(string credentialData, string environment)> CollectAsync();
+        /// <param name="cancellationToken">
+        /// Cancels the prompts. Pass it to Spectre.Console's <c>PromptAsync</c> /
+        /// <c>ConfirmAsync</c> overloads — an implementation that ignores it leaves
+        /// <c>accounts add</c> unable to be interrupted while it waits for input, which is
+        /// unbounded by nature since it waits on a human.
+        /// </param>
+        Task<(string credentialData, string environment)> CollectAsync(CancellationToken cancellationToken = default);
     }
 }
