@@ -262,10 +262,11 @@ public sealed class GitHubCredentialCollector : ICredentialCollector
 {
     public string ProviderName => GitHubCredential.ProviderName;
 
-    public async Task<(string credentialData, string environment)> CollectAsync()
+    public async Task<(string credentialData, string environment)> CollectAsync(
+        CancellationToken cancellationToken = default)
     {
         var pat = await AnsiConsole.PromptAsync(
-            new TextPrompt<string>("GitHub personal access token:").Secret());
+            new TextPrompt<string>("GitHub personal access token:").Secret(), cancellationToken);
         var credential = new GitHubCredential
         {
             PersonalAccessToken = pat,

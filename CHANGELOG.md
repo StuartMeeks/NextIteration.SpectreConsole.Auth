@@ -82,6 +82,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking
 
+- **`ICredentialCollector.CollectAsync()` now takes a `CancellationToken`.** Callers keep
+  compiling; the provider packages, which implement it, must update their signature. This is
+  the last provider-implemented member that could not be cancelled, and it waits on a human —
+  an unbounded wait by definition — so `accounts add` could not be interrupted mid-prompt even
+  though `AddCredentialCommand` had a token in hand the whole time. Spectre.Console's
+  `PromptAsync`/`ConfirmAsync` already accept one; the parameter just had nowhere to come from.
+
+  `ICredentialSummaryProvider.GetDisplayFields` is deliberately left alone: it is synchronous,
+  pure projection over an in-memory string, and has no I/O to cancel.
+
 - **`IAuthenticationService<,>` members now take a `CancellationToken`.** All three —
   `AuthenticateAsync()`, `AuthenticateAsync(credential)` and `ValidateTokenAsync(token)` —
   gain a trailing `CancellationToken cancellationToken = default`. Callers keep compiling;

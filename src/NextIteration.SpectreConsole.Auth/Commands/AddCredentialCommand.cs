@@ -77,7 +77,7 @@ namespace NextIteration.SpectreConsole.Auth.Commands
                             .Validate(name => !string.IsNullOrWhiteSpace(name)), cancellationToken).ConfigureAwait(false);
                 }
 
-                var (credentialData, environment) = await collector.CollectAsync().ConfigureAwait(false);
+                var (credentialData, environment) = await collector.CollectAsync(cancellationToken).ConfigureAwait(false);
 
                 var accountId = await _credentialManager.AddCredentialAsync(
                     collector.ProviderName,
