@@ -30,9 +30,9 @@
 		consumer-visible change and belongs in its own reviewed commit.
 	-->
 	<ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
-		<PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.2" />
-		<PackageVersion Include="Microsoft.Extensions.Http" Version="8.0.1" />
-		<PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
+		<PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.12" />
+		<PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.12" />
+		<PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="10.0.12" />
 	</ItemGroup>
 	<ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
 		<PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.10" />
@@ -56,7 +56,7 @@
 
 	<!-- Build / source-link tooling. PrivateAssets="All" in the csproj. STANDARD.md 1.7. -->
 	<ItemGroup>
-		<PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.400" />
+		<PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.401" />
 	</ItemGroup>
 
 	<!--
@@ -65,8 +65,8 @@
 		coverlet.collector: all three are VSTest-only and MTP replaces the runner.
 	-->
 	<ItemGroup>
-		<PackageVersion Include="xunit.v3" Version="4.0.0" />
-		<PackageVersion Include="Microsoft.Testing.Extensions.CodeCoverage" Version="18.11.0" />
+		<PackageVersion Include="xunit.v3" Version="4.0.1" />
+		<PackageVersion Include="Microsoft.Testing.Extensions.CodeCoverage" Version="18.11.2" />
 	</ItemGroup>
 
 </Project>
