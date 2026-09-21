@@ -347,11 +347,12 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Encryption
         private static readonly byte[] KeystoreMagic = "NISCA-KS"u8.ToArray();
 
         // Crypto constants mirrored from LocalFileCredentialEncryption so the
-        // tests can forge a genuine version-1 keystore.
+        // tests can forge a genuine version-1 or version-2 keystore.
         private const int LegacyPbkdf2Iterations = 600_000;
         private const int LegacyKeySize = 32;
         private const int LegacyNonceSize = 12;
         private const int LegacyTagSize = 16;
+        private const string KekDomainV2 = "keystore/kek/v2";
 
         /// <summary>
         /// Reads the derived data key out of an instance whose key has already
@@ -366,46 +367,63 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Encryption
         }
 
         /// <summary>
-        /// Writes a keystore in the pre-version-2 shape: the data key sealed
-        /// under the old OSVersion-based KEK, optionally with the version-1
-        /// header (or headerless, as the earliest builds wrote).
+        /// Writes a version-1 keystore: the data key sealed under the old
+        /// OSVersion-based KEK, optionally with the version-1 header (or
+        /// headerless, as the earliest builds wrote).
         /// </summary>
-        private static async Task WriteLegacyKeystoreAsync(string directory, byte[] dataKey, bool withHeader, byte[]? entropy = null)
+        private static Task WriteLegacyKeystoreAsync(string directory, byte[] dataKey, bool withHeader, byte[]? entropy = null)
         {
-            var kek = DeriveLegacyKek(entropy);
+            var kek = DeriveTestKek($"{Environment.MachineName}:{Environment.UserName}:{Environment.OSVersion}", entropy);
+            return WriteKeystoreFileAsync(directory, kek, dataKey, withHeader ? (byte)1 : null);
+        }
+
+        /// <summary>
+        /// Writes a version-2 keystore: the data key sealed under the machine/user
+        /// KEK (with the v2 domain tag), framed with the version-2 header.
+        /// </summary>
+        private static Task WriteV2KeystoreAsync(string directory, byte[] dataKey, byte[]? entropy = null)
+        {
+            var kek = DeriveTestKek($"{Environment.MachineName}:{Environment.UserName}:{KekDomainV2}", entropy);
+            return WriteKeystoreFileAsync(directory, kek, dataKey, version: 2);
+        }
+
+        private static async Task WriteKeystoreFileAsync(string directory, byte[] kek, byte[] dataKey, byte? version)
+        {
             var wrapped = LegacyGcmEncrypt(kek, dataKey);
 
             byte[] onDisk;
-            if (withHeader)
+            if (version is byte v)
             {
                 onDisk = new byte[KeystoreMagic.Length + 1 + wrapped.Length];
                 Buffer.BlockCopy(KeystoreMagic, 0, onDisk, 0, KeystoreMagic.Length);
-                onDisk[KeystoreMagic.Length] = 1; // legacy format version
+                onDisk[KeystoreMagic.Length] = v;
                 Buffer.BlockCopy(wrapped, 0, onDisk, KeystoreMagic.Length + 1, wrapped.Length);
             }
             else
             {
-                onDisk = wrapped;
+                onDisk = wrapped; // headerless (earliest v1 shape)
             }
 
             await File.WriteAllBytesAsync(Path.Join(directory, ".keystore"), onDisk, TestContext.Current.CancellationToken);
         }
 
-        private static byte[] DeriveLegacyKek(byte[]? entropy)
+        // Legacy (v1/v2) KEK derivation: PBKDF2 over a context string with the
+        // machine/user salt, entropy prepended null-separated. Mirrors
+        // LocalFileCredentialEncryption.DeriveKek for the pre-v3 salt.
+        private static byte[] DeriveTestKek(string context, byte[]? entropy)
         {
             var salt = System.Text.Encoding.UTF8.GetBytes($"{Environment.MachineName}:{Environment.UserName}");
-            var machineIdentity = $"{Environment.MachineName}:{Environment.UserName}:{Environment.OSVersion}";
 
             if (entropy is null || entropy.Length == 0)
             {
-                return Rfc2898DeriveBytes.Pbkdf2(machineIdentity, salt, LegacyPbkdf2Iterations, HashAlgorithmName.SHA256, LegacyKeySize);
+                return Rfc2898DeriveBytes.Pbkdf2(context, salt, LegacyPbkdf2Iterations, HashAlgorithmName.SHA256, LegacyKeySize);
             }
 
-            var machineBytes = System.Text.Encoding.UTF8.GetBytes(machineIdentity);
-            var password = new byte[entropy.Length + 1 + machineBytes.Length];
+            var contextBytes = System.Text.Encoding.UTF8.GetBytes(context);
+            var password = new byte[entropy.Length + 1 + contextBytes.Length];
             Buffer.BlockCopy(entropy, 0, password, 0, entropy.Length);
             password[entropy.Length] = 0x00;
-            Buffer.BlockCopy(machineBytes, 0, password, entropy.Length + 1, machineBytes.Length);
+            Buffer.BlockCopy(contextBytes, 0, password, entropy.Length + 1, contextBytes.Length);
             return Rfc2898DeriveBytes.Pbkdf2(password, salt, LegacyPbkdf2Iterations, HashAlgorithmName.SHA256, LegacyKeySize);
         }
 
@@ -434,13 +452,31 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Encryption
             _ = await encryption.EncryptAsync("trigger keystore creation");
 
             var bytes = await File.ReadAllBytesAsync(Path.Join(temp.Path, ".keystore"), TestContext.Current.CancellationToken);
-            Assert.True(bytes.Length > KeystoreMagic.Length + 1);
+            // Header is magic | version(3) | salt(16) | payload.
+            Assert.True(bytes.Length > KeystoreMagic.Length + 1 + 16);
             Assert.Equal(KeystoreMagic, bytes[..KeystoreMagic.Length]);
-            Assert.Equal(2, bytes[KeystoreMagic.Length]); // format version (2 = OSVersion-free KEK)
+            Assert.Equal(3, bytes[KeystoreMagic.Length]); // format version (3 = random-salt, no identity)
         }
 
         [Fact]
-        public async Task Keystore_LegacyV1_IsMigratedToV2_AndStillDecrypts()
+        public async Task Keystore_V3_HeaderSaltIsRandomPerKeystore()
+        {
+            using var tempA = new TempDir();
+            using var tempB = new TempDir();
+            _ = await new LocalFileCredentialEncryption(tempA.Path).EncryptAsync("a");
+            _ = await new LocalFileCredentialEncryption(tempB.Path).EncryptAsync("b");
+
+            var a = await File.ReadAllBytesAsync(Path.Join(tempA.Path, ".keystore"), TestContext.Current.CancellationToken);
+            var b = await File.ReadAllBytesAsync(Path.Join(tempB.Path, ".keystore"), TestContext.Current.CancellationToken);
+
+            var offset = KeystoreMagic.Length + 1;
+            var saltA = a[offset..(offset + 16)];
+            var saltB = b[offset..(offset + 16)];
+            Assert.NotEqual(saltA, saltB);
+        }
+
+        [Fact]
+        public async Task Keystore_LegacyV1_IsMigratedToV3_AndStillDecrypts()
         {
             using var temp = new TempDir();
             var keystorePath = Path.Join(temp.Path, ".keystore");
@@ -458,10 +494,10 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Encryption
             var reader = new LocalFileCredentialEncryption(temp.Path);
             Assert.Equal("bound to a v1 keystore", await reader.DecryptAsync(cipher));
 
-            // The first load migrated the file in place: the version byte is now 2.
+            // The first load migrated the file in place: the version byte is now 3.
             var bytes = await File.ReadAllBytesAsync(keystorePath, TestContext.Current.CancellationToken);
             Assert.Equal(KeystoreMagic, bytes[..KeystoreMagic.Length]);
-            Assert.Equal(2, bytes[KeystoreMagic.Length]);
+            Assert.Equal(3, bytes[KeystoreMagic.Length]);
 
             // And the migrated keystore opens under a further fresh instance.
             var afterMigration = new LocalFileCredentialEncryption(temp.Path);
@@ -469,7 +505,7 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Encryption
         }
 
         [Fact]
-        public async Task Keystore_LegacyHeaderless_IsMigratedToV2_AndStillReadable()
+        public async Task Keystore_LegacyHeaderless_IsMigratedToV3_AndStillReadable()
         {
             using var temp = new TempDir();
             var keystorePath = Path.Join(temp.Path, ".keystore");
@@ -488,11 +524,11 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Encryption
             // Migrated up to the current header + version.
             var bytes = await File.ReadAllBytesAsync(keystorePath, TestContext.Current.CancellationToken);
             Assert.Equal(KeystoreMagic, bytes[..KeystoreMagic.Length]);
-            Assert.Equal(2, bytes[KeystoreMagic.Length]);
+            Assert.Equal(3, bytes[KeystoreMagic.Length]);
         }
 
         [Fact]
-        public async Task Keystore_LegacyV1_WithCallerEntropy_IsMigratedToV2()
+        public async Task Keystore_LegacyV1_WithCallerEntropy_IsMigratedToV3()
         {
             using var temp = new TempDir();
             var keystorePath = Path.Join(temp.Path, ".keystore");
@@ -509,7 +545,49 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Encryption
             Assert.Equal("v1 with entropy", await reader.DecryptAsync(cipher));
 
             var bytes = await File.ReadAllBytesAsync(keystorePath, TestContext.Current.CancellationToken);
-            Assert.Equal(2, bytes[KeystoreMagic.Length]);
+            Assert.Equal(3, bytes[KeystoreMagic.Length]);
+        }
+
+        [Fact]
+        public async Task Keystore_LegacyV2_IsMigratedToV3_AndStillDecrypts()
+        {
+            using var temp = new TempDir();
+            var keystorePath = Path.Join(temp.Path, ".keystore");
+
+            // Forge a genuine version-2 keystore (machine/user KEK, no OSVersion)
+            // wrapping the same data key — the shape the previous release wrote.
+            var writer = new LocalFileCredentialEncryption(temp.Path);
+            var cipher = await writer.EncryptAsync("bound to a v2 keystore");
+            var dataKey = await GetDataKeyAsync(writer);
+            await WriteV2KeystoreAsync(temp.Path, dataKey);
+
+            var reader = new LocalFileCredentialEncryption(temp.Path);
+            Assert.Equal("bound to a v2 keystore", await reader.DecryptAsync(cipher));
+
+            // Re-sealed as v3 (random salt, no identity).
+            var bytes = await File.ReadAllBytesAsync(keystorePath, TestContext.Current.CancellationToken);
+            Assert.Equal(KeystoreMagic, bytes[..KeystoreMagic.Length]);
+            Assert.Equal(3, bytes[KeystoreMagic.Length]);
+            Assert.True(bytes.Length > KeystoreMagic.Length + 1 + 16);
+        }
+
+        [Fact]
+        public async Task Keystore_LegacyV2_WithCallerEntropy_IsMigratedToV3()
+        {
+            using var temp = new TempDir();
+            var keystorePath = Path.Join(temp.Path, ".keystore");
+            var entropy = "deployment-secret"u8.ToArray();
+
+            var writer = new LocalFileCredentialEncryption(temp.Path, entropy);
+            var cipher = await writer.EncryptAsync("v2 with entropy");
+            var dataKey = await GetDataKeyAsync(writer);
+            await WriteV2KeystoreAsync(temp.Path, dataKey, entropy);
+
+            var reader = new LocalFileCredentialEncryption(temp.Path, entropy);
+            Assert.Equal("v2 with entropy", await reader.DecryptAsync(cipher));
+
+            var bytes = await File.ReadAllBytesAsync(keystorePath, TestContext.Current.CancellationToken);
+            Assert.Equal(3, bytes[KeystoreMagic.Length]);
         }
 
         [Fact]
