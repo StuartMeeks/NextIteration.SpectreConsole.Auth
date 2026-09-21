@@ -16,10 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `{MachineName}:{UserName}:{OSVersion}`, so a feature update (e.g. 25H2 → 26H2)
   changed `Environment.OSVersion`, rotated the KEK, and left every credential
   undecryptable with `AuthenticationTagMismatchException` and no migration path.
-  The KEK now derives from stable machine/user identity only — `OSVersion` is
-  dropped — so later OS updates cannot break the store. Machine and user name
-  still bind the keystore to this machine/user, and the security boundary is
-  unchanged (filesystem permissions on the credentials directory).
+  The KEK no longer folds in any ambient identity (see the format change below),
+  so neither an OS update nor a machine rename can break the store. The security
+  boundary is unchanged (filesystem permissions on the credentials directory).
 
 - **The Keychain test-retry budget is raised so `macos-15` stops flaking.** The
   `RetryHelper` default was 20 attempts × 25 ms ≈ 500 ms, which was too tight on
@@ -32,16 +31,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Keystore format bumped to version 2** (`.keystore` header). A version-1
-  keystore — and a legacy headerless one, both sealed under the old
-  OSVersion-based KEK — is read with the legacy KEK and then **transparently
-  re-sealed as version 2 on first load**, so an existing, still-readable store
-  migrates itself on upgrade and becomes immune to future OS updates. The
-  re-seal is best-effort: it overwrites in place (safe, since the data key is
-  unchanged) and a persistence failure never fails an otherwise-successful read.
-  A keystore already broken by an OS update performed *before* this upgrade
-  cannot be recovered by the library; the integrity-error message now names that
-  cause.
+- **The local keystore KEK no longer folds in machine, user, or OS identity;
+  format bumped to version 3.** The KEK now derives (PBKDF2) from a random
+  per-keystore salt stored in the `.keystore` header plus a fixed domain tag.
+  Ambient identity (`MachineName`/`UserName`, and previously `OSVersion`) was
+  only ever a tripwire, not a security boundary — it is discoverable — and it
+  broke the store on a machine rename or OS update, so it is gone. Older
+  keystores (version 1 and legacy headerless = machine/user/OSVersion KEK;
+  version 2 = machine/user KEK) are read with their old KEK and **transparently
+  re-sealed as version 3 on first load**. The re-seal is best-effort: it
+  overwrites in place (safe, since the data key is unchanged) and a persistence
+  failure never fails an otherwise-successful read.
+
+  **Behaviour change:** a default-mode (no `AdditionalEntropy`) credentials
+  directory is now **portable** — copied whole to another machine or user it
+  still decrypts. This drops the "won't open elsewhere" tripwire, which was
+  never a real control. For genuine binding, supply `AdditionalEntropy` (a
+  per-machine or per-deployment secret) — now the file backend's only real
+  cryptographic boundary — or use the DPAPI / platform-keychain backends, which
+  bind to OS-managed secrets and survive renames and OS updates.
+
+  A keystore already broken by an OS update performed *before* the version-1→3
+  fix was installed cannot be recovered by the library; the integrity-error
+  message names the likely causes (corruption/tampering, or a wrong
+  `AdditionalEntropy`).
 
 ## [2.0.0] — 2026-08-28
 

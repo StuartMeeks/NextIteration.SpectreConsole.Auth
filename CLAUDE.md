@@ -44,8 +44,12 @@ whenever the providers take a major, so check it against their
   `MoveFileEx` raises a sharing violation when the destination is open or two replacements
   race. See the remarks on `AtomicFile`.
 - **`LocalFileCredentialEncryption`'s security boundary is filesystem permissions**, not
-  the KEK — it is derived from non-secret machine identifiers unless the caller supplies
-  `AdditionalEntropy`. Do not describe it as protecting against same-user code.
+  the KEK — in default mode the KEK is derived from a non-secret random salt stored in the
+  `.keystore` header (v3), so a default-mode credentials directory is *portable* across
+  machines/users. The only real cryptographic boundary is `AdditionalEntropy` (or the
+  DPAPI/keychain backends). Do not describe the file backend as protecting against
+  same-user code, and do not reintroduce machine/user/OS identity into the KEK — that was
+  removed because it broke the store on OS updates and renames while never being a boundary.
 
 ## Repository baseline
 

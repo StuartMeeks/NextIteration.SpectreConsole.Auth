@@ -132,7 +132,12 @@ Every command accepts `-v` / `--verbose` for full stack-trace output when someth
 
 ### Moving credentials between machines
 
-Stored credentials are encrypted with a **machine-bound** key (the local KEK is derived from machine/user identity; the Keychain/libsecret/DPAPI backends key off the OS secret store). That means the files on disk can't simply be copied to another machine — they won't decrypt there. `accounts export` / `accounts import` solve this by re-encrypting the whole set under a passphrase you carry:
+How portable your on-disk store is depends on the backend:
+
+- **Default file backend** (no `AdditionalEntropy`): the credentials directory is self-contained and **portable** — copy the whole directory, `.keystore` included, to another machine or user and it still decrypts. Convenient, but it means the files are only as protected as their filesystem permissions (see [Security model](#security-model)).
+- **Hardened file backend** (`AdditionalEntropy` set) or the **Keychain / libsecret / DPAPI** backends: the store is bound to a caller secret or the OS secret store, so a raw copy won't decrypt elsewhere.
+
+For a portable transfer that works regardless of backend — and is safer than copying raw files, since it's protected by a passphrase rather than just filesystem permissions — use `accounts export` / `accounts import`, which re-encrypt the whole set under a passphrase you carry:
 
 ```console
 # On the old machine — you'll be prompted for a passphrase (and to confirm it):
@@ -146,7 +151,7 @@ $ my-cli accounts import credentials.bundle
 - **Passphrase-only.** The archive is AES-256-GCM encrypted with a PBKDF2-derived key (600,000 iterations, random per-export salt). There is no plaintext export. For scripting, read the passphrase from an environment variable with `--passphrase-env MY_VAR` instead of being prompted. On Unix the archive file is written `0600`.
 - **Conflicts.** An imported credential is matched to an existing one on *(provider, account name, environment)*. On a match you're prompted to skip or overwrite; pass `--on-conflict skip` or `--on-conflict overwrite` to decide up front (a non-interactive run with no flag skips).
 - **Fidelity.** Account IDs and which credential is selected are preserved. Original creation timestamps are preserved on the file and libsecret backends; the macOS Keychain assigns its own, so imported items show a fresh timestamp there.
-- **A credential that cannot be read is left out, not exported blank.** If the store holds an entry this machine's keystore can no longer decrypt — a credentials directory copied from another machine, say — `accounts export` skips it and tells you how many it skipped. The archive is then genuinely incomplete, which is why it says so: writing an empty payload instead would restore *over* a real secret at the far end. `accounts list` marks the same entries `(unreadable)` so you can see which they are.
+- **A credential that cannot be read is left out, not exported blank.** If the store holds an entry the keystore can no longer decrypt — after the `AdditionalEntropy` value changed, say, or a file corrupted on disk — `accounts export` skips it and tells you how many it skipped. The archive is then genuinely incomplete, which is why it says so: writing an empty payload instead would restore *over* a real secret at the far end. `accounts list` marks the same entries `(unreadable)` so you can see which they are.
 
 > The archive contains **every stored secret**, protected only by your passphrase. Choose a strong one and treat the file as sensitive.
 
@@ -154,22 +159,21 @@ $ my-cli accounts import credentials.bundle
 
 ## Security model
 
-Credentials are encrypted with **AES-GCM** (authenticated — tampering is detected on decrypt). The data-encryption key is itself encrypted and stored in a `.keystore` file inside your credentials directory. The key-encryption key (KEK) is derived from machine + user identifiers via PBKDF2-HMAC-SHA256 (600,000 iterations).
+Credentials are encrypted with **AES-GCM** (authenticated — tampering is detected on decrypt). The data-encryption key is itself encrypted and stored in a `.keystore` file inside your credentials directory. The key-encryption key (KEK) is derived via PBKDF2-HMAC-SHA256 (600,000 iterations) from a random salt stored in the `.keystore` header — with **no machine, user, or OS input**. (Earlier versions folded machine/user/OS identity into the KEK; that broke the store on a machine rename or OS update and was never a real security boundary, so it was removed.)
 
 **What this protects against:**
 
 - Other users on the same machine reading your credentials (filesystem permissions on the credentials directory enforce this).
-- A casual attacker who ends up with a copy of the `.keystore` file but lacks knowledge of the originating machine and user.
-- Undetected tampering of credential files (AES-GCM's authentication tag refuses decryption on any modification).
+- Undetected tampering of the keystore or credential files (AES-GCM's authentication tag refuses decryption on any modification — a tampered header salt just yields a wrong key, which the tag then rejects).
 
 **What it does *not* protect against** (in default mode):
 
-- A local attacker who has read access to the credentials directory **and** knows the machine hostname + username — the KEK is deterministic given those inputs. Close this gap either by supplying `AdditionalEntropy` (see below) or by using DPAPI / a platform keychain.
+- **Anyone who obtains a copy of the credentials directory.** The KEK is derived from the (non-secret, stored) header salt and a fixed constant, so the `.keystore` is self-describing: whoever has the files can derive the KEK and decrypt. In default mode the store is portable *by design*, and the boundary is purely the filesystem permissions. Close this gap by supplying `AdditionalEntropy` (see below) or by using DPAPI / a platform keychain.
 - A compromised running process: once your CLI has decrypted a credential in memory, it's in memory.
 
 **Hardening with `AdditionalEntropy`:**
 
-The default KEK is derived purely from machine state, so anyone who copies the `.keystore` file plus the machine's hostname/username can decrypt. Pass a secret into `CredentialStoreOptions.AdditionalEntropy` to close that gap:
+The default KEK has no secret input, so anyone who copies the `.keystore` file can derive it and decrypt. Pass a secret into `CredentialStoreOptions.AdditionalEntropy` to make the KEK depend on something that is *not* in the file:
 
 ```csharp
 services.AddCredentialStore(opts =>
@@ -181,7 +185,7 @@ services.AddCredentialStore(opts =>
 });
 ```
 
-The entropy is mixed into the PBKDF2 password so the KEK now depends on both the machine AND this value. An attacker with the keystore file but without the entropy can't decrypt. Common sources: a per-deployment secret from env / HSM, a value from a secret manager, a user-entered passphrase.
+The entropy is mixed into the PBKDF2 password so the KEK depends on this value, which is never stored in the keystore. An attacker with the keystore file but without the entropy can't decrypt. Common sources: a per-deployment secret from env / HSM, a value from a secret manager, a user-entered passphrase. If you specifically want machine binding, make the entropy a per-machine secret — that puts the binding on a value you control rather than on a discoverable identifier.
 
 Caveats:
 

@@ -22,11 +22,14 @@ pre-1.0 libraries and there are no long-term support branches.
 These libraries store credentials on the local filesystem or in an OS secret store.
 Two things are explicitly **not** claimed:
 
-- `LocalFileCredentialEncryption` derives its key-encryption key from non-secret
-  machine and user identifiers. Its real security boundary is filesystem permissions.
-  It protects credentials at rest against another *user*; it does not protect them
-  against code running as the same user. Supply `AdditionalEntropy` for a KEK that
-  depends on a caller-held secret as well as the machine.
+- `LocalFileCredentialEncryption` derives its key-encryption key from a non-secret
+  random salt stored in the keystore header — no machine, user, or OS input — so in
+  default mode the credentials directory is portable and its real security boundary is
+  filesystem permissions. It protects credentials at rest against another *user*; it
+  does not protect them against anyone who obtains a copy of the files, nor against code
+  running as the same user. Supply `AdditionalEntropy` (or use the DPAPI / platform
+  keychain backends) for a KEK that depends on a caller-held secret not present in the
+  keystore.
 - Nothing here defends against a compromised host, a debugger attached to the
   process, or a heap dump taken while credentials are decrypted in memory.
 

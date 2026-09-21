@@ -6,45 +6,50 @@ using NextIteration.SpectreConsole.Auth.Persistence;
 namespace NextIteration.SpectreConsole.Auth.Encryption
 {
     /// <summary>
-    /// File-based credential encryption using AES-GCM with a machine-derived
-    /// key-encryption key. Works on Windows, macOS, and Linux.
+    /// File-based credential encryption using AES-GCM with a key-encryption key
+    /// derived from a random per-keystore salt. Works on Windows, macOS, and Linux.
     /// </summary>
     /// <remarks>
     /// Authenticated encryption (AES-GCM) detects tampering on decrypt.
     /// <para>
     /// <b>Default security model</b> (no caller-supplied entropy): the data
     /// encryption key lives encrypted in a <c>.keystore</c> file inside the
-    /// credentials directory. That file is encrypted with a KEK derived via
-    /// PBKDF2 from stable machine/user identity
-    /// (<c>{MachineName}:{UserName}</c>). The OS version is deliberately
-    /// <em>not</em> an input: it once was, but a Windows feature update then
-    /// rotated the KEK and left the keystore unreadable, so it was removed
-    /// (see the format/migration note below). Because all KEK inputs are
-    /// discoverable on the machine, the real security boundary is the
-    /// filesystem permissions on the credentials directory, not the
-    /// cryptography. An attacker with read access to the keystore file on the
-    /// same machine/user can derive the KEK and decrypt credentials.
+    /// credentials directory. That file is sealed with a KEK derived via PBKDF2
+    /// from a random per-keystore salt (stored in the keystore header) and a
+    /// fixed domain tag — no machine, user, or OS input. Every KEK input is
+    /// therefore either random-but-stored or a constant, so the KEK is not a
+    /// secret: the real security boundary is the filesystem permissions on the
+    /// credentials directory. A consequence, by design, is that a default-mode
+    /// credentials directory is <em>portable</em> — copied whole to another
+    /// machine or user it still decrypts. Earlier versions folded machine/user
+    /// (and once OS) identity into the KEK; that was only a tripwire, never a
+    /// boundary — the identity is discoverable — and it broke the store on a
+    /// machine rename or OS update, so it was removed.
     /// </para>
     /// <para>
     /// <b>Hardened mode</b>: supply <c>additionalEntropy</c> via the
     /// constructor (or <see cref="CredentialStoreOptions.AdditionalEntropy"/>).
     /// The entropy is mixed into the PBKDF2 password so the KEK depends on
-    /// something an attacker cannot recover from the machine alone — for
-    /// example a per-deployment secret from an environment variable,
-    /// hardware token, or HSM. In this mode the keystore file alone is
-    /// insufficient to decrypt; the entropy value must also be known.
+    /// something an attacker cannot recover from the keystore alone — for
+    /// example a per-deployment secret from an environment variable, hardware
+    /// token, or HSM. This is the file backend's only real cryptographic
+    /// boundary and the supported way to bind a store: the keystore file AND the
+    /// entropy value are both required to decrypt. If machine binding is what
+    /// you want, make the entropy a per-machine secret.
     /// </para>
     /// <para>
     /// For the strongest protection, use DPAPI (on Windows) or a platform
-    /// keychain (macOS Keychain, Linux libsecret) instead.
+    /// keychain (macOS Keychain, Linux libsecret) instead — those bind to
+    /// OS-managed secrets and survive a machine rename or OS update.
     /// </para>
     /// <para>
-    /// The <c>.keystore</c> file written by this version carries a format
-    /// header (magic + one-byte version). A version-1 keystore — sealed under
-    /// the old OSVersion-based KEK — and a legacy headerless keystore are both
-    /// still read, with the old KEK, and then transparently re-sealed as the
-    /// current version so a later OS update cannot break them. A keystore
-    /// written by this version is not readable by pre-header library versions.
+    /// The <c>.keystore</c> carries a format header (magic + one-byte version).
+    /// Version 3 (current) stores a random salt and puts no identity in the KEK.
+    /// Older keystores — version 2 (machine/user KEK), and version 1 plus legacy
+    /// headerless (machine/user/OSVersion KEK) — are still read with their old
+    /// KEK and then transparently re-sealed as version 3 on first load, so an
+    /// existing, still-readable store migrates itself. A keystore written by
+    /// this version is not readable by older library versions.
     /// </para>
     /// <para>
     /// Implements <see cref="IDisposable"/>: disposing zeroes the in-memory
@@ -65,39 +70,55 @@ namespace NextIteration.SpectreConsole.Auth.Encryption
         // library versions have no header (they begin with a random 12-byte
         // nonce); those are still read, since the 8-byte magic can't plausibly
         // collide with a random nonce prefix (~2^-64). A keystore written by
-        // this version is not readable by pre-header library versions.
+        // this version is not readable by older library versions.
         //
-        // Version 1 sealed the data key under a KEK that included
-        // Environment.OSVersion; a Windows feature update changed OSVersion and
-        // left the keystore undecryptable with no migration path. Version 2
-        // drops OSVersion from the KEK (see DeriveKeyEncryptionKey). A version-1
-        // keystore — and a legacy headerless one, which used the same
-        // OSVersion-based KEK — is read with the legacy KEK and then
-        // transparently re-sealed as version 2 on first load, so an existing
-        // store survives the upgrade and is immune to later OS updates. A
-        // version this build does not know is rejected with a clear error
-        // rather than surfacing as an opaque integrity-check failure.
+        // Version history of the KEK the data key is sealed under:
+        //   v1 (and legacy headerless): {MachineName}:{UserName}:{OSVersion}.
+        //     A Windows feature update changed OSVersion and broke the store.
+        //   v2: {MachineName}:{UserName}:{tag}. OSVersion dropped, but machine
+        //     and user name are still ambient inputs that break on a rename and
+        //     are not a real boundary (they are discoverable).
+        //   v3 (current): a random per-keystore salt (stored in the header)
+        //     plus a fixed tag — no machine/user/OS input. See DeriveCurrentKek.
+        // v3 layout is: magic | version(1) | salt(SaltSize) | AES-GCM payload.
+        // v1/v2 have no salt field (their salt is derived from machine/user).
+        //
+        // A v1 or v2 keystore is read with its old KEK and transparently
+        // re-sealed as v3 on first load. A version this build does not know is
+        // rejected with a clear error rather than an opaque integrity failure.
         private static readonly byte[] KeystoreMagic = "NISCA-KS"u8.ToArray();
         private const byte LegacyOsVersionFormatVersion = 1;
-        private const byte KeystoreFormatVersion = 2;
+        private const byte MachineBoundFormatVersion = 2;
+        private const byte KeystoreFormatVersion = 3;
+
+        // Random salt written into every v3 keystore header. 16 bytes is the
+        // usual PBKDF2 salt size; it is non-secret and its only job is to make
+        // each keystore's KEK independent and to give hardened-mode brute-force
+        // a per-keystore cost.
+        private const int SaltSize = 16;
 
         // PBKDF2-HMAC-SHA256 iteration count. OWASP 2023 guidance is
         // 600,000. In default mode (no caller entropy) iterations provide
-        // little benefit because the KEK inputs are all machine-derived; an
+        // little benefit because the KEK inputs are all non-secret; an
         // attacker with keystore access computes the KEK directly. In
         // hardened mode (caller entropy supplied) the iterations earn their
         // keep — they force the cost-per-guess on any offline brute-force
         // attempt against the caller-supplied secret.
         private const int Pbkdf2Iterations = 600_000;
 
-        // Stable, non-secret domain tag folded into the version-2 KEK password.
-        // It marks the OSVersion-free derivation (so a future KDF change can
-        // pick a new tag) and keeps the PBKDF2 password from being byte-for-byte
-        // the salt, which is the same machine/user string.
+        // Stable, non-secret domain tags folded into the KEK password. Each
+        // marks a KEK scheme so a future KDF change can pick a new tag; v2 also
+        // kept its password distinct from its machine/user salt. Both are kept
+        // so existing v1/v2 keystores can still be read and migrated.
+        private const string KekDomainV3 = "keystore/kek/v3";
         private const string KekDomainV2 = "keystore/kek/v2";
 
         private readonly string _keyFile;
-        private readonly byte[] _salt;
+
+        // The machine/user salt used by the v1 and v2 KEKs. Retained only to
+        // read and migrate an existing v1/v2 keystore; v3 uses a random salt
+        // from the header instead.
+        private readonly byte[] _legacySalt;
         private readonly byte[]? _callerEntropy;
 
         // The data encryption key is derived once per instance lifetime and
@@ -121,12 +142,12 @@ namespace NextIteration.SpectreConsole.Auth.Encryption
         /// </param>
         /// <param name="additionalEntropy">
         /// Optional caller-supplied entropy mixed into the key-derivation
-        /// step. When non-null and non-empty, the KEK depends on this value
-        /// in addition to the machine-derived inputs — the file-based
-        /// backend then requires both the keystore file AND the entropy
-        /// value to decrypt. Changing the entropy invalidates any existing
-        /// keystore; callers who rotate the value must delete the keystore
-        /// and re-add credentials.
+        /// step. When non-null and non-empty, the KEK depends on this value —
+        /// the file-based backend then requires both the keystore file AND the
+        /// entropy value to decrypt, and it is the only real cryptographic
+        /// boundary the backend has. Changing the entropy invalidates any
+        /// existing keystore; callers who rotate the value must delete the
+        /// keystore and re-add credentials.
         /// </param>
         /// <exception cref="ArgumentException">
         /// <paramref name="credentialsDirectory"/> is null, empty, or whitespace.
@@ -137,10 +158,10 @@ namespace NextIteration.SpectreConsole.Auth.Encryption
 
             _keyFile = Path.Join(credentialsDirectory, ".keystore");
 
-            // PBKDF2 salt — non-secret, stable per machine/user. Caller
-            // entropy is mixed into the password side instead of the salt
-            // so it contributes to HMAC input during the key-stretch loop.
-            _salt = Encoding.UTF8.GetBytes($"{Environment.MachineName}:{Environment.UserName}");
+            // Legacy (v1/v2) PBKDF2 salt — the machine/user string. Used only to
+            // read an existing v1/v2 keystore for migration; v3 keystores carry
+            // their own random salt in the header.
+            _legacySalt = Encoding.UTF8.GetBytes($"{Environment.MachineName}:{Environment.UserName}");
 
             // Defensive copy — the caller may mutate or clear their buffer.
             _callerEntropy = additionalEntropy is { Length: > 0 }
@@ -215,8 +236,8 @@ namespace NextIteration.SpectreConsole.Auth.Encryption
                 // Message adapts to whether caller entropy is in play, so a
                 // consumer who just changed their entropy knows where to look.
                 var message = _callerEntropy is null
-                    ? "Credential data failed integrity check. The file has been tampered with, or was encrypted with a different key (for example, the keystore was copied from another machine or user, or a Windows feature update changed the machine identity before this version — which no longer folds the OS version into the key — was installed)."
-                    : "Credential data failed integrity check. The file has been tampered with, or was encrypted with a different additional-entropy value, or on a different machine.";
+                    ? "Credential data failed integrity check. The keystore file is corrupt or has been tampered with (its header salt or ciphertext was modified)."
+                    : "Credential data failed integrity check. The file has been tampered with, or was encrypted with a different additional-entropy value.";
                 throw new InvalidOperationException(message, ex);
             }
             catch (InvalidOperationException)
@@ -251,24 +272,28 @@ namespace NextIteration.SpectreConsole.Auth.Encryption
             }
 
             var stored = await File.ReadAllBytesAsync(_keyFile).ConfigureAwait(false);
-            var (encryptedKey, version) = ParseKeystore(stored);
+            var (encryptedKey, version, headerSalt) = ParseKeystore(stored);
 
-            // Version 2 is sealed under the OSVersion-free KEK; version 1 (and a
-            // legacy headerless keystore) under the old OSVersion-based KEK. A
-            // wrong KEK surfaces as AuthenticationTagMismatchException here,
-            // which DecryptAsync turns into the actionable integrity error.
-            var kek = version == KeystoreFormatVersion
-                ? DeriveKeyEncryptionKey()
-                : DeriveLegacyKeyEncryptionKey();
+            // Pick the KEK for the version on disk. v3 uses the random header
+            // salt and no identity; v2 the machine/user KEK; v1 (and headerless)
+            // the machine/user/OSVersion KEK. A wrong KEK surfaces as
+            // AuthenticationTagMismatchException here, which DecryptAsync turns
+            // into the actionable integrity error.
+            var kek = version switch
+            {
+                KeystoreFormatVersion => DeriveCurrentKek(headerSalt!),
+                MachineBoundFormatVersion => DeriveV2Kek(),
+                _ => DeriveLegacyOsVersionKek(),
+            };
 
             var dataKey = DecryptWithGcm(kek, encryptedKey);
 
             if (version != KeystoreFormatVersion)
             {
-                // Re-seal the recovered data key under the current KEK so a
-                // later OS update can't break the store. Best-effort: the
-                // decrypt has already succeeded, so a persistence failure must
-                // not fail the read.
+                // Re-seal the recovered data key as v3 (random salt, no identity)
+                // so a rename or OS update can't break the store. Best-effort:
+                // the decrypt has already succeeded, so a persistence failure
+                // must not fail the read.
                 await TryMigrateToCurrentFormatAsync(dataKey).ConfigureAwait(false);
             }
 
@@ -276,16 +301,18 @@ namespace NextIteration.SpectreConsole.Auth.Encryption
         }
 
         /// <summary>
-        /// Splits a keystore file into its AES-GCM payload and format version.
-        /// A keystore written by a header-carrying version begins with
-        /// <see cref="KeystoreMagic"/> followed by a one-byte version; a legacy
-        /// headerless keystore has no header and is reported as
-        /// <see cref="LegacyOsVersionFormatVersion"/> (it used the same
-        /// OSVersion-based KEK). Throws when a header is present but its version
-        /// is not understood, so a keystore from a newer library fails clearly
-        /// rather than as an opaque integrity error.
+        /// Splits a keystore file into its AES-GCM payload, format version, and
+        /// (for v3) the random KEK salt from the header. A header-carrying
+        /// keystore begins with <see cref="KeystoreMagic"/> and a one-byte
+        /// version; a v3 keystore then carries a <see cref="SaltSize"/>-byte
+        /// salt before the payload, while v1/v2 have none (their salt is derived
+        /// from machine/user, so the returned salt is <see langword="null"/>). A
+        /// legacy headerless keystore has no header and is reported as
+        /// <see cref="LegacyOsVersionFormatVersion"/>. Throws when a header is
+        /// present but its version is not understood, so a keystore from a newer
+        /// library fails clearly rather than as an opaque integrity error.
         /// </summary>
-        private static (byte[] EncryptedKey, byte Version) ParseKeystore(byte[] stored)
+        private static (byte[] EncryptedKey, byte Version, byte[]? Salt) ParseKeystore(byte[] stored)
         {
             var headerLength = KeystoreMagic.Length + 1;
             if (stored.Length < headerLength ||
@@ -293,17 +320,30 @@ namespace NextIteration.SpectreConsole.Auth.Encryption
             {
                 // No recognisable header — a pre-header keystore, sealed under
                 // the legacy OSVersion-based KEK.
-                return (stored, LegacyOsVersionFormatVersion);
+                return (stored, LegacyOsVersionFormatVersion, null);
             }
 
             var version = stored[KeystoreMagic.Length];
-            if (version is not (LegacyOsVersionFormatVersion or KeystoreFormatVersion))
+            if (version is not (LegacyOsVersionFormatVersion or MachineBoundFormatVersion or KeystoreFormatVersion))
             {
                 throw new InvalidOperationException(
                     $"Unsupported keystore format version {version}. This build supports versions {LegacyOsVersionFormatVersion}–{KeystoreFormatVersion}; the keystore was likely written by a newer version of the library.");
             }
 
-            return (stored[headerLength..], version);
+            if (version != KeystoreFormatVersion)
+            {
+                // v1/v2: no salt field, payload follows the version byte directly.
+                return (stored[headerLength..], version, null);
+            }
+
+            // v3: a random salt precedes the payload.
+            if (stored.Length < headerLength + SaltSize)
+            {
+                throw new InvalidOperationException("Keystore is truncated: the version-3 salt is missing.");
+            }
+
+            var salt = stored[headerLength..(headerLength + SaltSize)];
+            return (stored[(headerLength + SaltSize)..], version, salt);
         }
 
         private async Task CreateKeyFileAsync()
@@ -330,13 +370,12 @@ namespace NextIteration.SpectreConsole.Auth.Encryption
         }
 
         /// <summary>
-        /// Re-seals an already-recovered data key under the current
-        /// (OSVersion-free) KEK, upgrading a version-1 or legacy headerless
-        /// keystore to the current format in place. Best-effort: any I/O or
-        /// permission failure is swallowed because the caller already holds a
-        /// valid in-memory data key and its read has succeeded — a persistence
-        /// failure must not turn a working decrypt into an error. The next run
-        /// retries the migration.
+        /// Re-seals an already-recovered data key as a v3 keystore (random salt,
+        /// no identity), upgrading a version-1, version-2, or legacy headerless
+        /// keystore in place. Best-effort: any I/O or permission failure is
+        /// swallowed because the caller already holds a valid in-memory data key
+        /// and its read has succeeded — a persistence failure must not turn a
+        /// working decrypt into an error. The next run retries the migration.
         /// </summary>
         private async Task TryMigrateToCurrentFormatAsync(byte[] dataKey)
         {
@@ -361,19 +400,23 @@ namespace NextIteration.SpectreConsole.Auth.Encryption
         }
 
         /// <summary>
-        /// Encrypts <paramref name="dataKey"/> under the current KEK and frames
-        /// it with the current format header, ready to write as a keystore.
+        /// Encrypts <paramref name="dataKey"/> under a fresh v3 KEK (a new random
+        /// salt) and frames it as a v3 keystore:
+        /// <c>magic | version | salt(SaltSize) | AES-GCM payload</c>, ready to
+        /// write. A new salt each seal is why re-migrating the same data key is
+        /// safe and idempotent.
         /// </summary>
         private byte[] SealDataKey(byte[] dataKey)
         {
-            var encryptedKey = EncryptWithGcm(DeriveKeyEncryptionKey(), dataKey);
+            var salt = RandomNumberGenerator.GetBytes(SaltSize);
+            var encryptedKey = EncryptWithGcm(DeriveCurrentKek(salt), dataKey);
 
-            // Frame the payload with the format header so the version is
-            // self-describing on the next read.
-            var framed = new byte[KeystoreMagic.Length + 1 + encryptedKey.Length];
-            Buffer.BlockCopy(KeystoreMagic, 0, framed, 0, KeystoreMagic.Length);
-            framed[KeystoreMagic.Length] = KeystoreFormatVersion;
-            Buffer.BlockCopy(encryptedKey, 0, framed, KeystoreMagic.Length + 1, encryptedKey.Length);
+            var offset = KeystoreMagic.Length;
+            var framed = new byte[offset + 1 + SaltSize + encryptedKey.Length];
+            Buffer.BlockCopy(KeystoreMagic, 0, framed, 0, offset);
+            framed[offset] = KeystoreFormatVersion;
+            Buffer.BlockCopy(salt, 0, framed, offset + 1, SaltSize);
+            Buffer.BlockCopy(encryptedKey, 0, framed, offset + 1 + SaltSize, encryptedKey.Length);
             return framed;
         }
 
@@ -387,43 +430,56 @@ namespace NextIteration.SpectreConsole.Auth.Encryption
         }
 
         /// <summary>
-        /// Derives the current key-encryption key. The OS version is
-        /// deliberately excluded: it changed on every Windows feature update
-        /// (e.g. 25H2 → 26H2), which rotated the KEK and left the keystore
-        /// undecryptable. Machine and user name still bind the keystore to this
-        /// machine/user.
+        /// Derives the current (v3) key-encryption key from the per-keystore
+        /// random <paramref name="salt"/> and a fixed domain tag. No machine,
+        /// user, or OS input — so a rename or OS update cannot rotate it, and a
+        /// default-mode keystore is portable. Caller entropy, when present, is
+        /// the only secret in the password and the only real boundary.
         /// </summary>
-        private byte[] DeriveKeyEncryptionKey()
-            => DeriveKek($"{Environment.MachineName}:{Environment.UserName}:{KekDomainV2}");
+        private byte[] DeriveCurrentKek(byte[] salt)
+            => DeriveKek(KekDomainV3, salt);
 
         /// <summary>
-        /// Derives the pre-version-2 key-encryption key, which folded the
-        /// volatile <see cref="Environment.OSVersion"/> into the identity. Used
-        /// only to read an existing version-1 (or legacy headerless) keystore so
-        /// it can be re-sealed under <see cref="DeriveKeyEncryptionKey"/>.
+        /// Derives the version-2 KEK (machine/user identity plus a tag, salted
+        /// by the machine/user string). Used only to read an existing v2
+        /// keystore so it can be re-sealed as v3.
         /// </summary>
-        private byte[] DeriveLegacyKeyEncryptionKey()
-            => DeriveKek($"{Environment.MachineName}:{Environment.UserName}:{Environment.OSVersion}");
+        private byte[] DeriveV2Kek()
+            => DeriveKek($"{Environment.MachineName}:{Environment.UserName}:{KekDomainV2}", _legacySalt);
 
-        private byte[] DeriveKek(string machineIdentity)
+        /// <summary>
+        /// Derives the version-1 KEK, which folded the volatile
+        /// <see cref="Environment.OSVersion"/> into the identity. Used only to
+        /// read an existing v1 (or legacy headerless) keystore so it can be
+        /// re-sealed as v3.
+        /// </summary>
+        private byte[] DeriveLegacyOsVersionKek()
+            => DeriveKek($"{Environment.MachineName}:{Environment.UserName}:{Environment.OSVersion}", _legacySalt);
+
+        /// <summary>
+        /// PBKDF2-HMAC-SHA256 over <paramref name="context"/> and
+        /// <paramref name="salt"/>. Caller entropy, when present, is prepended to
+        /// the context (null-separated) so it contributes to every HMAC block.
+        /// </summary>
+        private byte[] DeriveKek(string context, byte[] salt)
         {
             if (_callerEntropy is null)
             {
-                // Default mode — the machine identity is the whole password.
-                return Rfc2898DeriveBytes.Pbkdf2(machineIdentity, _salt, Pbkdf2Iterations, HashAlgorithmName.SHA256, KeySize);
+                // Default mode — the context is the whole password.
+                return Rfc2898DeriveBytes.Pbkdf2(context, salt, Pbkdf2Iterations, HashAlgorithmName.SHA256, KeySize);
             }
 
             // Hardened mode — caller entropy is concatenated with a null
-            // separator in front of the machine identity. Using the byte
-            // overload rather than string interpolation so caller-supplied
-            // bytes don't have to be valid UTF-8.
-            var machineBytes = Encoding.UTF8.GetBytes(machineIdentity);
-            var password = new byte[_callerEntropy.Length + 1 + machineBytes.Length];
+            // separator in front of the context. Using the byte overload rather
+            // than string interpolation so caller-supplied bytes don't have to
+            // be valid UTF-8.
+            var contextBytes = Encoding.UTF8.GetBytes(context);
+            var password = new byte[_callerEntropy.Length + 1 + contextBytes.Length];
             Buffer.BlockCopy(_callerEntropy, 0, password, 0, _callerEntropy.Length);
             password[_callerEntropy.Length] = 0x00;
-            Buffer.BlockCopy(machineBytes, 0, password, _callerEntropy.Length + 1, machineBytes.Length);
+            Buffer.BlockCopy(contextBytes, 0, password, _callerEntropy.Length + 1, contextBytes.Length);
 
-            return Rfc2898DeriveBytes.Pbkdf2(password, _salt, Pbkdf2Iterations, HashAlgorithmName.SHA256, KeySize);
+            return Rfc2898DeriveBytes.Pbkdf2(password, salt, Pbkdf2Iterations, HashAlgorithmName.SHA256, KeySize);
         }
 
         /// <summary>
