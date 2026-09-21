@@ -9,35 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
+## [2.1.0] — 2026-09-21
 
-- **A Windows feature update no longer invalidates the local keystore.** The
-  file backend's key-encryption key was derived from
-  `{MachineName}:{UserName}:{OSVersion}`, so a feature update (e.g. 25H2 → 26H2)
-  changed `Environment.OSVersion`, rotated the KEK, and left every credential
-  undecryptable with `AuthenticationTagMismatchException` and no migration path.
-  The KEK no longer folds in any ambient identity (see the format change below),
-  so neither an OS update nor a machine rename can break the store. The security
-  boundary is unchanged (filesystem permissions on the credentials directory).
+Fixes a **data-loss bug in the local file backend** and, in doing so, retires the
+machine-bound key model behind it. A Windows feature update (e.g. 25H2 → 26H2) changed
+`Environment.OSVersion`, rotated the key-encryption key, and left every credential
+undecryptable with no way back. The fix removes `OSVersion` — and then `MachineName` and
+`UserName` too — from the KEK entirely: it now derives from a random per-keystore salt with
+no ambient identity, so no OS update or machine rename can ever rotate it again. Existing
+keystores migrate themselves on first load.
 
-- **The Keychain test-retry budget is raised so `macos-15` stops flaking.** The
-  `RetryHelper` default was 20 attempts × 25 ms ≈ 500 ms, which was too tight on
-  a contended `macos-15` runner: a selection item written by
-  `RestoreCredentialAsync` was not always visible within it, so
-  `RestoreCredentialAsync_PreservesAccountIdAndSelection` timed out its
-  `IsSelected` retry and the assertion failed intermittently. The default is now
-  40 × 50 ms ≈ 2 s; retries still return as soon as the store is consistent, so
-  passing runs are unaffected. Test-only change.
+That carries one **behaviour change worth reading before you upgrade**: a default-mode (no
+`AdditionalEntropy`) credentials directory is now **portable** — copied to another machine or
+user it still decrypts. The removed machine binding was only ever a tripwire, not a security
+boundary (the identity was discoverable); the real boundary remains the filesystem
+permissions on the credentials directory, and `AdditionalEntropy` — or the DPAPI / platform
+keychain backends — is the way to bind a store to a secret. See the README's Security model.
+
+No provider-facing interface changed, so this is a minor and the provider packages need no
+re-cut: their `[2.0.0, 3.0.0)` dependency range resolves against 2.1.0 unchanged.
 
 ### Changed
-
-- **net10 floor for the runtime-aligned Microsoft packages raised to `10.0.12`.**
-  `Microsoft.Extensions.DependencyInjection.Abstractions`, `Microsoft.Extensions.Http`,
-  and `System.Security.Cryptography.ProtectedData` move from `10.0.10` to the current
-  `10.0.12` servicing patch on `net10.0` (the `net8.0` floor is unchanged and already at
-  its latest 8.0.x servicing). These carry per-TFM floors and are now fully ignored by
-  Dependabot (STANDARD.md 4.10), so their floors are maintained by hand; this is that
-  bump. Consumer-visible on `net10.0` only, and within the major consumers already run.
 
 - **The local keystore KEK no longer folds in machine, user, or OS identity;
   format bumped to version 3.** The KEK now derives (PBKDF2) from a random
@@ -63,6 +55,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fix was installed cannot be recovered by the library; the integrity-error
   message names the likely causes (corruption/tampering, or a wrong
   `AdditionalEntropy`).
+
+- **net10 floor for the runtime-aligned Microsoft packages raised to `10.0.12`.**
+  `Microsoft.Extensions.DependencyInjection.Abstractions`, `Microsoft.Extensions.Http`,
+  and `System.Security.Cryptography.ProtectedData` move from `10.0.10` to the current
+  `10.0.12` servicing patch on `net10.0` (the `net8.0` floor is unchanged and already at
+  its latest 8.0.x servicing). These carry per-TFM floors and are now fully ignored by
+  Dependabot (STANDARD.md 4.10), so their floors are maintained by hand; this is that
+  bump. Consumer-visible on `net10.0` only, and within the major consumers already run.
+
+### Fixed
+
+- **A Windows feature update no longer invalidates the local keystore.** The
+  file backend's key-encryption key was derived from
+  `{MachineName}:{UserName}:{OSVersion}`, so a feature update (e.g. 25H2 → 26H2)
+  changed `Environment.OSVersion`, rotated the KEK, and left every credential
+  undecryptable with `AuthenticationTagMismatchException` and no migration path.
+  The KEK no longer folds in any ambient identity (see the format change above),
+  so neither an OS update nor a machine rename can break the store. The security
+  boundary is unchanged (filesystem permissions on the credentials directory).
+
+- **The Keychain test-retry budget is raised so `macos-15` stops flaking.** The
+  `RetryHelper` default was 20 attempts × 25 ms ≈ 500 ms, which was too tight on
+  a contended `macos-15` runner: a selection item written by
+  `RestoreCredentialAsync` was not always visible within it, so
+  `RestoreCredentialAsync_PreservesAccountIdAndSelection` timed out its
+  `IsSelected` retry and the assertion failed intermittently. The default is now
+  40 × 50 ms ≈ 2 s; retries still return as soon as the store is consistent, so
+  passing runs are unaffected. Test-only change.
 
 ## [2.0.0] — 2026-08-28
 
@@ -902,7 +922,8 @@ Consumers needed a way to read a specific stored credential's secret at runtime 
 - SourceLink, deterministic builds, embedded symbols, published symbol packages.
 - `TreatWarningsAsErrors=true`, `AnalysisLevel=latest` — zero-warning public API.
 
-[Unreleased]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/compare/v2.1.0...HEAD
+[2.1.0]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/releases/tag/v2.1.0
 [2.0.0]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/releases/tag/v2.0.0
 [1.1.0]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/releases/tag/v1.1.0
 [1.0.1]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/releases/tag/v1.0.1
