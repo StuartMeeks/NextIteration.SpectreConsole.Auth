@@ -9,6 +9,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A Windows feature update no longer invalidates the local keystore.** The
+  file backend's key-encryption key was derived from
+  `{MachineName}:{UserName}:{OSVersion}`, so a feature update (e.g. 25H2 → 26H2)
+  changed `Environment.OSVersion`, rotated the KEK, and left every credential
+  undecryptable with `AuthenticationTagMismatchException` and no migration path.
+  The KEK now derives from stable machine/user identity only — `OSVersion` is
+  dropped — so later OS updates cannot break the store. Machine and user name
+  still bind the keystore to this machine/user, and the security boundary is
+  unchanged (filesystem permissions on the credentials directory).
+
+### Changed
+
+- **Keystore format bumped to version 2** (`.keystore` header). A version-1
+  keystore — and a legacy headerless one, both sealed under the old
+  OSVersion-based KEK — is read with the legacy KEK and then **transparently
+  re-sealed as version 2 on first load**, so an existing, still-readable store
+  migrates itself on upgrade and becomes immune to future OS updates. The
+  re-seal is best-effort: it overwrites in place (safe, since the data key is
+  unchanged) and a persistence failure never fails an otherwise-successful read.
+  A keystore already broken by an OS update performed *before* this upgrade
+  cannot be recovered by the library; the integrity-error message now names that
+  cause.
+
 ## [2.0.0] — 2026-08-28
 
 Major release. **Three provider-facing interfaces gain a `CancellationToken`** —

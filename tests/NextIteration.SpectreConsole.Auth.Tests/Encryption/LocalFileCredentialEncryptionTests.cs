@@ -346,6 +346,85 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Encryption
 
         private static readonly byte[] KeystoreMagic = "NISCA-KS"u8.ToArray();
 
+        // Crypto constants mirrored from LocalFileCredentialEncryption so the
+        // tests can forge a genuine version-1 keystore.
+        private const int LegacyPbkdf2Iterations = 600_000;
+        private const int LegacyKeySize = 32;
+        private const int LegacyNonceSize = 12;
+        private const int LegacyTagSize = 16;
+
+        /// <summary>
+        /// Reads the derived data key out of an instance whose key has already
+        /// been materialised (call after a first Encrypt/Decrypt).
+        /// </summary>
+        private static async Task<byte[]> GetDataKeyAsync(LocalFileCredentialEncryption encryption)
+        {
+            var field = typeof(LocalFileCredentialEncryption)
+                .GetField("_dataKey", BindingFlags.NonPublic | BindingFlags.Instance)!;
+            var lazy = (Lazy<Task<byte[]>>)field.GetValue(encryption)!;
+            return await lazy.Value;
+        }
+
+        /// <summary>
+        /// Writes a keystore in the pre-version-2 shape: the data key sealed
+        /// under the old OSVersion-based KEK, optionally with the version-1
+        /// header (or headerless, as the earliest builds wrote).
+        /// </summary>
+        private static async Task WriteLegacyKeystoreAsync(string directory, byte[] dataKey, bool withHeader, byte[]? entropy = null)
+        {
+            var kek = DeriveLegacyKek(entropy);
+            var wrapped = LegacyGcmEncrypt(kek, dataKey);
+
+            byte[] onDisk;
+            if (withHeader)
+            {
+                onDisk = new byte[KeystoreMagic.Length + 1 + wrapped.Length];
+                Buffer.BlockCopy(KeystoreMagic, 0, onDisk, 0, KeystoreMagic.Length);
+                onDisk[KeystoreMagic.Length] = 1; // legacy format version
+                Buffer.BlockCopy(wrapped, 0, onDisk, KeystoreMagic.Length + 1, wrapped.Length);
+            }
+            else
+            {
+                onDisk = wrapped;
+            }
+
+            await File.WriteAllBytesAsync(Path.Join(directory, ".keystore"), onDisk, TestContext.Current.CancellationToken);
+        }
+
+        private static byte[] DeriveLegacyKek(byte[]? entropy)
+        {
+            var salt = System.Text.Encoding.UTF8.GetBytes($"{Environment.MachineName}:{Environment.UserName}");
+            var machineIdentity = $"{Environment.MachineName}:{Environment.UserName}:{Environment.OSVersion}";
+
+            if (entropy is null || entropy.Length == 0)
+            {
+                return Rfc2898DeriveBytes.Pbkdf2(machineIdentity, salt, LegacyPbkdf2Iterations, HashAlgorithmName.SHA256, LegacyKeySize);
+            }
+
+            var machineBytes = System.Text.Encoding.UTF8.GetBytes(machineIdentity);
+            var password = new byte[entropy.Length + 1 + machineBytes.Length];
+            Buffer.BlockCopy(entropy, 0, password, 0, entropy.Length);
+            password[entropy.Length] = 0x00;
+            Buffer.BlockCopy(machineBytes, 0, password, entropy.Length + 1, machineBytes.Length);
+            return Rfc2898DeriveBytes.Pbkdf2(password, salt, LegacyPbkdf2Iterations, HashAlgorithmName.SHA256, LegacyKeySize);
+        }
+
+        private static byte[] LegacyGcmEncrypt(byte[] key, byte[] plaintext)
+        {
+            var nonce = RandomNumberGenerator.GetBytes(LegacyNonceSize);
+            var ciphertext = new byte[plaintext.Length];
+            var tag = new byte[LegacyTagSize];
+
+            using var aes = new AesGcm(key, LegacyTagSize);
+            aes.Encrypt(nonce, plaintext, ciphertext, tag);
+
+            var output = new byte[LegacyNonceSize + LegacyTagSize + ciphertext.Length];
+            Buffer.BlockCopy(nonce, 0, output, 0, LegacyNonceSize);
+            Buffer.BlockCopy(tag, 0, output, LegacyNonceSize, LegacyTagSize);
+            Buffer.BlockCopy(ciphertext, 0, output, LegacyNonceSize + LegacyTagSize, ciphertext.Length);
+            return output;
+        }
+
         [Fact]
         public async Task Keystore_WrittenByThisVersion_CarriesFormatHeader()
         {
@@ -357,27 +436,80 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Encryption
             var bytes = await File.ReadAllBytesAsync(Path.Join(temp.Path, ".keystore"), TestContext.Current.CancellationToken);
             Assert.True(bytes.Length > KeystoreMagic.Length + 1);
             Assert.Equal(KeystoreMagic, bytes[..KeystoreMagic.Length]);
-            Assert.Equal(1, bytes[KeystoreMagic.Length]); // format version
+            Assert.Equal(2, bytes[KeystoreMagic.Length]); // format version (2 = OSVersion-free KEK)
         }
 
         [Fact]
-        public async Task Keystore_LegacyHeaderless_IsStillReadable()
+        public async Task Keystore_LegacyV1_IsMigratedToV2_AndStillDecrypts()
         {
             using var temp = new TempDir();
             var keystorePath = Path.Join(temp.Path, ".keystore");
 
-            // Produce a keystore, then strip its header to reconstruct the legacy
-            // headerless on-disk shape a pre-header library version would have
-            // written. A fresh instance must still read ciphertext bound to it.
+            // Produce a keystore + ciphertext, then replace the keystore with a
+            // genuine version-1 one (sealed under the old OSVersion-based KEK)
+            // wrapping the same data key — the on-disk shape a pre-v2 library
+            // would have left behind.
+            var writer = new LocalFileCredentialEncryption(temp.Path);
+            var cipher = await writer.EncryptAsync("bound to a v1 keystore");
+            var dataKey = await GetDataKeyAsync(writer);
+            await WriteLegacyKeystoreAsync(temp.Path, dataKey, withHeader: true);
+
+            // A fresh instance reads it (via the legacy KEK) and re-seals it.
+            var reader = new LocalFileCredentialEncryption(temp.Path);
+            Assert.Equal("bound to a v1 keystore", await reader.DecryptAsync(cipher));
+
+            // The first load migrated the file in place: the version byte is now 2.
+            var bytes = await File.ReadAllBytesAsync(keystorePath, TestContext.Current.CancellationToken);
+            Assert.Equal(KeystoreMagic, bytes[..KeystoreMagic.Length]);
+            Assert.Equal(2, bytes[KeystoreMagic.Length]);
+
+            // And the migrated keystore opens under a further fresh instance.
+            var afterMigration = new LocalFileCredentialEncryption(temp.Path);
+            Assert.Equal("bound to a v1 keystore", await afterMigration.DecryptAsync(cipher));
+        }
+
+        [Fact]
+        public async Task Keystore_LegacyHeaderless_IsMigratedToV2_AndStillReadable()
+        {
+            using var temp = new TempDir();
+            var keystorePath = Path.Join(temp.Path, ".keystore");
+
             var writer = new LocalFileCredentialEncryption(temp.Path);
             var cipher = await writer.EncryptAsync("bound to a legacy keystore");
+            var dataKey = await GetDataKeyAsync(writer);
 
-            var framed = await File.ReadAllBytesAsync(keystorePath, TestContext.Current.CancellationToken);
-            var legacy = framed[(KeystoreMagic.Length + 1)..];
-            await File.WriteAllBytesAsync(keystorePath, legacy, TestContext.Current.CancellationToken);
+            // Pre-header on-disk shape: no magic/version, sealed under the old
+            // OSVersion-based KEK.
+            await WriteLegacyKeystoreAsync(temp.Path, dataKey, withHeader: false);
 
             var reader = new LocalFileCredentialEncryption(temp.Path);
             Assert.Equal("bound to a legacy keystore", await reader.DecryptAsync(cipher));
+
+            // Migrated up to the current header + version.
+            var bytes = await File.ReadAllBytesAsync(keystorePath, TestContext.Current.CancellationToken);
+            Assert.Equal(KeystoreMagic, bytes[..KeystoreMagic.Length]);
+            Assert.Equal(2, bytes[KeystoreMagic.Length]);
+        }
+
+        [Fact]
+        public async Task Keystore_LegacyV1_WithCallerEntropy_IsMigratedToV2()
+        {
+            using var temp = new TempDir();
+            var keystorePath = Path.Join(temp.Path, ".keystore");
+            var entropy = "deployment-secret"u8.ToArray();
+
+            var writer = new LocalFileCredentialEncryption(temp.Path, entropy);
+            var cipher = await writer.EncryptAsync("v1 with entropy");
+            var dataKey = await GetDataKeyAsync(writer);
+
+            // The legacy KEK also folded the entropy in, so the re-wrap must too.
+            await WriteLegacyKeystoreAsync(temp.Path, dataKey, withHeader: true, entropy: entropy);
+
+            var reader = new LocalFileCredentialEncryption(temp.Path, entropy);
+            Assert.Equal("v1 with entropy", await reader.DecryptAsync(cipher));
+
+            var bytes = await File.ReadAllBytesAsync(keystorePath, TestContext.Current.CancellationToken);
+            Assert.Equal(2, bytes[KeystoreMagic.Length]);
         }
 
         [Fact]
