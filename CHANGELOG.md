@@ -26,8 +26,12 @@ boundary (the identity was discoverable); the real boundary remains the filesyst
 permissions on the credentials directory, and `AdditionalEntropy` — or the DPAPI / platform
 keychain backends — is the way to bind a store to a secret. See the README's Security model.
 
-No provider-facing interface changed, so this is a minor and the provider packages need no
-re-cut: their `[2.0.0, 3.0.0)` dependency range resolves against 2.1.0 unchanged.
+No provider-facing interface changed, so this is an API-compatible minor and existing
+provider assemblies keep working against it. It does **not**, however, reach provider
+_consumers_ on its own: a NuGet version range resolves to its **floor**, so the 2.x
+providers' `[2.0.0, 3.0.0)` dependency resolves to core **2.0.0**, not 2.1.0. A downstream
+consumer keeps getting the old core until the provider packages raise their floor to
+`[2.1.0, 3.0.0)` and re-cut.
 
 ### Changed
 
