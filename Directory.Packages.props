@@ -22,8 +22,11 @@
 		groups per-TFM during the inner build.
 
 		These three are also listed under `ignore` in .github/dependabot.yml with
-		update-types: [version-update:semver-major] (STANDARD.md 4.10), so
-		Dependabot never proposes the 8.x -> 10.x bump that can never be merged.
+		NO update-types filter (STANDARD.md 4.10), so Dependabot never touches them
+		on either TFM. A name-scoped major-only ignore is not enough: because the
+		same package name lives in both the net8 and net10 groups, a net10
+		minor/patch bump would rewrite the net8 floor to a 10.x version (PR #89).
+		Both floors are bumped by hand.
 
 		Versions here are unchanged from the per-project references they replaced.
 		This migration is deliberately behaviour-preserving: raising a floor is a
