@@ -18,6 +18,15 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Infrastructure
     /// final attempt still fails</b>. A persistent error still fails the test with its real
     /// message; only a transient one is ridden out.
     /// </para>
+    /// <para>
+    /// The default budget is 40 attempts × 50 ms ≈ 2 s. The original 20 × 25 ms ≈ 500 ms
+    /// proved too tight on a contended <c>macos-15</c> runner: a selection item written by
+    /// <c>RestoreCredentialAsync</c> moments earlier was not always visible within it, so
+    /// the <c>IsSelected</c> retry in <c>RestoreCredentialAsync_PreservesAccountIdAndSelection</c>
+    /// timed out and the following assertion failed. Retries return
+    /// as soon as the store is consistent, so a passing run does not pay the ceiling; only a
+    /// genuine failure waits the full 2 s before surfacing.
+    /// </para>
     /// </summary>
     internal static class RetryHelper
     {
@@ -29,8 +38,8 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Infrastructure
         /// </summary>
         internal static async Task<bool> UntilTrueAsync(
             Func<Task<bool>> action,
-            int maxAttempts = 20,
-            int delayMs = 25)
+            int maxAttempts = 40,
+            int delayMs = 50)
         {
             for (var attempt = 1; attempt <= maxAttempts; attempt++)
             {
@@ -69,8 +78,8 @@ namespace NextIteration.SpectreConsole.Auth.Tests.Infrastructure
         internal static async Task<T> UntilAsync<T>(
             Func<Task<T>> action,
             Func<T, bool> predicate,
-            int maxAttempts = 20,
-            int delayMs = 25)
+            int maxAttempts = 40,
+            int delayMs = 50)
         {
             T result = default!;
             var satisfied = false;

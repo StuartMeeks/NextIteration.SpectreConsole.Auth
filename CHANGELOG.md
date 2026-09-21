@@ -21,6 +21,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   still bind the keystore to this machine/user, and the security boundary is
   unchanged (filesystem permissions on the credentials directory).
 
+- **The Keychain test-retry budget is raised so `macos-15` stops flaking.** The
+  `RetryHelper` default was 20 attempts × 25 ms ≈ 500 ms, which was too tight on
+  a contended `macos-15` runner: a selection item written by
+  `RestoreCredentialAsync` was not always visible within it, so
+  `RestoreCredentialAsync_PreservesAccountIdAndSelection` timed out its
+  `IsSelected` retry and the assertion failed intermittently. The default is now
+  40 × 50 ms ≈ 2 s; retries still return as soon as the store is consistent, so
+  passing runs are unaffected. Test-only change.
+
 ### Changed
 
 - **Keystore format bumped to version 2** (`.keystore` header). A version-1
