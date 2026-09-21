@@ -31,6 +31,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **net10 floor for the runtime-aligned Microsoft packages raised to `10.0.12`.**
+  `Microsoft.Extensions.DependencyInjection.Abstractions`, `Microsoft.Extensions.Http`,
+  and `System.Security.Cryptography.ProtectedData` move from `10.0.10` to the current
+  `10.0.12` servicing patch on `net10.0` (the `net8.0` floor is unchanged and already at
+  its latest 8.0.x servicing). These carry per-TFM floors and are now fully ignored by
+  Dependabot (STANDARD.md 4.10), so their floors are maintained by hand; this is that
+  bump. Consumer-visible on `net10.0` only, and within the major consumers already run.
+
 - **The local keystore KEK no longer folds in machine, user, or OS identity;
   format bumped to version 3.** The KEK now derives (PBKDF2) from a random
   per-keystore salt stored in the `.keystore` header plus a fixed domain tag.
