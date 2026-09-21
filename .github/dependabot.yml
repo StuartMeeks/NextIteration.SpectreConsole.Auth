@@ -23,30 +23,28 @@ updates:
       - dependencies
       - nuget
     # -------------------------------------------------------------------------
-    # These three carry deliberate per-TFM floors (see the csproj comment): a
-    # net8.0 consumer must stay on its own 8.0.x servicing line, so an
-    # 8.x -> 10.x major PR is never mergeable and would just be weekly noise.
+    # These carry deliberate per-TFM floors (see the csproj comment): a net8.0
+    # consumer must stay on its own 8.0.x servicing line. They are ignored
+    # ENTIRELY (no update-types filter = every version update), STANDARD.md 4.10.
     #
-    # Two caveats, both inherent to Dependabot rather than to this repo:
-    #  1. `ignore` matches by dependency NAME and cannot be scoped to a single
-    #     target framework. These packages are referenced under BOTH the net8.0
-    #     and net10.0 ItemGroups, so this also suppresses a future net10 major
-    #     (10.x -> 11.x). Bump those by hand when a new .NET major lands.
-    #  2. `ignore` conditions filter SECURITY updates as well as version
-    #     updates, so a major-version security fix for these would also be
-    #     suppressed. Low risk in practice (a CVE fix for 8.0.x ships as
-    #     8.0.y, a patch), but worth knowing.
+    # A major-only ignore is NOT enough. `ignore` matches by dependency NAME and
+    # cannot be scoped to one target framework, and each name appears under BOTH
+    # the net8.0 and net10.0 ItemGroups. Dependabot tracks a single version per
+    # name, so a net10 MINOR/PATCH bump — which a semver-major filter does not
+    # catch — is applied to every entry of that name, silently rewriting the
+    # net8.0 floor to a 10.x version. PR #89 did exactly that (8.0.x -> 10.0.12).
+    # Ignoring the package outright is the only name-scoped rule that protects a
+    # per-TFM floor; both floors are bumped by hand.
+    #
+    # Caveat, inherent to Dependabot: `ignore` also filters SECURITY updates, so
+    # a security fix for these is suppressed too. Low risk (a CVE fix for a
+    # floored line ships as a patch on that line, applied by hand), but worth
+    # knowing.
     # -------------------------------------------------------------------------
     ignore:
       - dependency-name: Microsoft.Extensions.DependencyInjection.Abstractions
-        update-types:
-          - version-update:semver-major
       - dependency-name: Microsoft.Extensions.Http
-        update-types:
-          - version-update:semver-major
       - dependency-name: System.Security.Cryptography.ProtectedData
-        update-types:
-          - version-update:semver-major
     groups:
       nuget-minor-patch:
         patterns:
