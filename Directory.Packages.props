@@ -54,7 +54,7 @@
 	-->
 	<ItemGroup>
 		<PackageVersion Include="Spectre.Console" Version="0.57.2" />
-		<PackageVersion Include="Spectre.Console.Cli" Version="0.55.0" />
+		<PackageVersion Include="Spectre.Console.Cli" Version="0.57.2" />
 	</ItemGroup>
 
 	<!-- Build / source-link tooling. PrivateAssets="All" in the csproj. STANDARD.md 1.7. -->
