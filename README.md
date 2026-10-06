@@ -106,7 +106,7 @@ And from inside any of your command handlers:
 ```csharp
 public sealed class SyncCommand(AdobeAuthenticationService auth) : AsyncCommand
 {
-    protected override async Task<int> ExecuteAsync(CommandContext context, CancellationToken cancellationToken)
+    public override async Task<int> ExecuteAsync(CommandContext context, CancellationToken cancellationToken)
     {
         var token = await auth.AuthenticateAsync(cancellationToken);
         // use token.GetAuthorizationHeader() on outgoing requests
@@ -431,9 +431,9 @@ change made to strengthen encryption. Register after, and verify with
 ## Requirements
 
 - **.NET 8.0** or **.NET 10.0** (the package multi-targets `net8.0;net10.0`)
-- **Spectre.Console** 0.57.2+ and **Spectre.Console.Cli** 0.55.0+
+- **Spectre.Console** 0.57.2+ and **Spectre.Console.Cli** 0.57.2+
 - **Microsoft.Extensions.DependencyInjection.Abstractions** — 8.0.2+ on `net8.0`,
-  10.0.10+ on `net10.0`
+  10.0.12+ on `net10.0`
 
 Dependency floors are set per target framework, so a `net8.0` consumer is never dragged
 off its own 8.0.x servicing line.
