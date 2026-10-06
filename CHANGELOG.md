@@ -9,6 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.0] — 2026-10-06
+
+Moves to **Spectre.Console.Cli 0.57.2**. Spectre.Console.Cli now ships on its own release
+line, and 0.57 changed `AsyncCommand<TSettings>.ExecuteAsync` from `protected` to `public`.
+The six credential commands follow suit. Widening an override is a compatible change for
+this package (package validation against 2.1.0 passes), but **raising the floor affects your
+own commands**: once you upgrade, every `AsyncCommand`/`Command` in your app built against
+0.55 has to declare its `Execute`/`ExecuteAsync` override `public`, or the build fails with
+CS0507.
+
+No provider-facing interface changed. The provider packages' `[2.1.0, 3.0.0)` range already
+resolves against 2.2.0.
+
+### Changed
+
+- **Spectre.Console.Cli floor raised from 0.55.0 to 0.57.2**, matching Spectre.Console.
+- **`ExecuteAsync` on `AddCredentialCommand`, `DeleteCredentialCommand`,
+  `ExportCredentialsCommand`, `ImportCredentialsCommand`, `ListCredentialsCommand` and
+  `SelectCredentialCommand` is now `public`**, as Spectre.Console.Cli 0.57 requires.
+
+### Documentation
+
+- README: the command-handler sample uses a `public override`, and Requirements lists the
+  real floors (Spectre.Console.Cli 0.57.2+; `net10.0` platform packages 10.0.12+, not
+  10.0.10+).
+
 ## [2.1.0] — 2026-09-21
 
 Fixes a **data-loss bug in the local file backend** and, in doing so, retires the
@@ -926,7 +952,8 @@ Consumers needed a way to read a specific stored credential's secret at runtime 
 - SourceLink, deterministic builds, embedded symbols, published symbol packages.
 - `TreatWarningsAsErrors=true`, `AnalysisLevel=latest` — zero-warning public API.
 
-[Unreleased]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/compare/v2.1.0...HEAD
+[Unreleased]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/compare/v2.2.0...HEAD
+[2.2.0]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/releases/tag/v2.2.0
 [2.1.0]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/releases/tag/v2.1.0
 [2.0.0]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/releases/tag/v2.0.0
 [1.1.0]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/releases/tag/v1.1.0

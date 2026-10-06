@@ -18,7 +18,7 @@ namespace NextIteration.SpectreConsole.Auth.Commands
         private readonly ICredentialManager _credentialManager = credentialManager;
 
         /// <inheritdoc />
-        protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
+        public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
         {
             try
             {
