@@ -49,6 +49,15 @@ namespace NextIteration.SpectreConsole.Auth.Persistence
             EnsureDirectoryExists();
         }
 
+        /// <summary>The directory this manager stores credentials in. Read by <c>accounts info</c>.</summary>
+        internal string CredentialsDirectoryPath => _credentialsDirectory;
+
+        /// <summary>The selections file inside <see cref="CredentialsDirectoryPath"/>.</summary>
+        internal string SelectionFilePath => _selectionFile;
+
+        /// <summary>The encryption backend actually in use, which may be a custom one.</summary>
+        internal ICredentialEncryption Encryption => _encryption;
+
         /// <inheritdoc />
         public async Task<IEnumerable<CredentialSummary>> ListCredentialsAsync(string providerName, CancellationToken cancellationToken = default)
         {

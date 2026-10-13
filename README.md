@@ -127,6 +127,7 @@ public sealed class SyncCommand(AdobeAuthenticationService auth) : AsyncCommand
 | `accounts delete [id] [--force]` | Remove a credential. Clears the selection if it pointed at the deleted entry. |
 | `accounts export <file> [--force]` | Write every credential to a single passphrase-encrypted archive. |
 | `accounts import <file> [--on-conflict skip\|overwrite]` | Restore credentials from an archive into this machine's store. |
+| `accounts info` | Show where and how credentials are stored: the backend, the credentials directory, keystore and selections paths, the encryption in use (AES-GCM file, DPAPI, Keychain, libsecret or a custom type), whether `AdditionalEntropy` is set, and the directory's permissions. Never decrypts anything or touches an OS secret store. |
 
 Every command accepts `-v` / `--verbose` for full stack-trace output when something goes wrong.
 
@@ -424,7 +425,8 @@ Order matters and getting it wrong fails **silently**. `AddCredentialStore` regi
 a custom backend registered *first* is quietly ignored and your credentials are encrypted with
 the default one. There is no error to tell you, which is exactly the wrong failure mode for a
 change made to strengthen encryption. Register after, and verify with
-`provider.GetRequiredService<ICredentialEncryption>().GetType()` if in doubt.
+`provider.GetRequiredService<ICredentialEncryption>().GetType()` if in doubt — or run
+`accounts info`, which names the encryption type the store is actually using.
 
 ---
 

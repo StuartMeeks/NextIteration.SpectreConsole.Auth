@@ -171,6 +171,15 @@ namespace NextIteration.SpectreConsole.Auth.Encryption
             _dataKey = new Lazy<Task<byte[]>>(LoadOrCreateDataKeyAsync, LazyThreadSafetyMode.ExecutionAndPublication);
         }
 
+        /// <summary>Path of the <c>.keystore</c> file. Read by <c>accounts info</c>.</summary>
+        internal string KeystorePath => _keyFile;
+
+        /// <summary>
+        /// Whether caller-supplied entropy is mixed into the KEK (hardened mode). Reports
+        /// only its presence — the value itself is never exposed.
+        /// </summary>
+        internal bool HasAdditionalEntropy => _callerEntropy is not null;
+
         /// <inheritdoc />
         public async Task<string> EncryptAsync(string plainText)
         {

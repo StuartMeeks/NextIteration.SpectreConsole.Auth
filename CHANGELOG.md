@@ -9,6 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.0] — 2026-10-13
+
+Adds **`accounts info`**, which shows where and how credentials are stored. It is a new
+command in the `accounts` branch and needs no code change in a consuming CLI: anything
+calling `AddAccountsBranch()` gets it on upgrade.
+
+No provider-facing interface changed, so the provider packages need no re-cut: their
+`[2.2.0, 3.0.0)` range admits 2.3.0. A range resolves to its floor, though, so a CLI that
+only references the providers keeps getting 2.2.0 until it references 2.3.0 directly.
+
+### Added
+
+- **`accounts info`** — shows where and how credentials are stored, so a user can find the
+  credentials directory without knowing how the host CLI configured it, and a developer can
+  confirm what is really wired up. For the file backend it lists the credentials directory,
+  keystore and selections paths, the encryption (AES-256-GCM, Windows DPAPI, or the type name
+  of a custom `ICredentialEncryption`), whether `AdditionalEntropy` is set (presence only,
+  never the value), and the directory's permissions — warning when they reach beyond the
+  owner, since those permissions are the default mode's security boundary. For Keychain and
+  libsecret it lists the app identifier (and collection). It describes the resolved
+  `ICredentialManager` rather than `CredentialStoreOptions`, so it is accurate for a
+  hand-registered DPAPI store and exposes a custom encryption registered in the wrong order.
+  It never decrypts a credential or queries an OS secret store, so it cannot prompt.
+
 ## [2.2.0] — 2026-10-06
 
 Moves to **Spectre.Console.Cli 0.57.2**. Spectre.Console.Cli now ships on its own release
@@ -952,7 +976,8 @@ Consumers needed a way to read a specific stored credential's secret at runtime 
 - SourceLink, deterministic builds, embedded symbols, published symbol packages.
 - `TreatWarningsAsErrors=true`, `AnalysisLevel=latest` — zero-warning public API.
 
-[Unreleased]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/compare/v2.2.0...HEAD
+[Unreleased]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/compare/v2.3.0...HEAD
+[2.3.0]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/releases/tag/v2.3.0
 [2.2.0]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/releases/tag/v2.2.0
 [2.1.0]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/releases/tag/v2.1.0
 [2.0.0]: https://github.com/StuartMeeks/NextIteration.SpectreConsole.Auth/releases/tag/v2.0.0

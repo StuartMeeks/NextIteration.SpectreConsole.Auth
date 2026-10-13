@@ -12,7 +12,8 @@ namespace NextIteration.SpectreConsole.Auth
     {
         /// <summary>
         /// Registers the <c>accounts</c> branch of credential-management commands
-        /// (<c>add</c>, <c>list</c>, <c>select</c>, <c>delete</c>).
+        /// (<c>add</c>, <c>list</c>, <c>select</c>, <c>delete</c>, <c>export</c>,
+        /// <c>import</c>, <c>info</c>).
         /// </summary>
         public static IConfigurator AddAccountsBranch(this IConfigurator configurator)
         {
@@ -47,6 +48,10 @@ namespace NextIteration.SpectreConsole.Auth
                     .WithDescription("Import credentials from an encrypted archive")
                     .WithExample("accounts", "import", "credentials.bundle")
                     .WithExample("accounts", "import", "credentials.bundle", "--on-conflict", "overwrite");
+
+                accounts.AddCommand<CredentialStoreInfoCommand>("info")
+                    .WithDescription("Show where and how credentials are stored")
+                    .WithExample("accounts", "info");
             });
 
             return configurator;
