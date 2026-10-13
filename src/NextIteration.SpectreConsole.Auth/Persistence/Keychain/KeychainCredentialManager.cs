@@ -58,6 +58,9 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Keychain
                 .ToDictionary(p => p.ProviderName, StringComparer.OrdinalIgnoreCase);
         }
 
+        /// <summary>The identifier scoping this CLI's Keychain items. Read by <c>accounts info</c>.</summary>
+        internal string AppIdentifier => _appIdentifier;
+
         /// <inheritdoc />
         public Task<string> AddCredentialAsync(string providerName, string accountName, string environment, string credentialData, CancellationToken cancellationToken = default)
         {

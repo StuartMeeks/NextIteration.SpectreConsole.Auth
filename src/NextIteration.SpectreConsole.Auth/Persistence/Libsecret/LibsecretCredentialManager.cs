@@ -90,6 +90,12 @@ namespace NextIteration.SpectreConsole.Auth.Persistence.Libsecret
                 .ToDictionary(p => p.ProviderName, StringComparer.OrdinalIgnoreCase);
         }
 
+        /// <summary>The identifier scoping this CLI's keyring items. Read by <c>accounts info</c>.</summary>
+        internal string AppIdentifier => _appIdentifier;
+
+        /// <summary>The Secret Service collection new items are written to.</summary>
+        internal string Collection => _collection;
+
         /// <inheritdoc />
         public Task<string> AddCredentialAsync(string providerName, string accountName, string environment, string credentialData, CancellationToken cancellationToken = default)
         {
