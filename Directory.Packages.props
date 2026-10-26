@@ -60,7 +60,7 @@
 
 	<!-- Build / source-link tooling. PrivateAssets="All" in the csproj. STANDARD.md 1.7. -->
 	<ItemGroup>
-		<PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.402" />
+		<PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.403" />
 	</ItemGroup>
 
 	<!--
