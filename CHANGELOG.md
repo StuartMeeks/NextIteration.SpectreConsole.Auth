@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The `test` matrix replaces `macos-14` with `macos-26`.** GitHub retired the macOS 14
+  runner image, and the label now fails at once with *"The configuration
+  'macos-14-arm64-us-default' is not supported"*. The leg showed as cancelled rather than
+  failed, but the `ci` gate still rejected it, so `main` went red on a dependency bump
+  (#105) that had nothing to do with it. The matrix still names two concrete macOS releases
+  rather than `macos-latest`, for the same reason it did before: the Keychain P/Invoke layer
+  should run against more than whichever release the alias points at. The two are now 15
+  and 26, the oldest and newest that still schedule. CI only; no package change.
+
 ## [2.3.0] — 2026-10-13
 
 Adds **`accounts info`**, which shows where and how credentials are stored. It is a new
