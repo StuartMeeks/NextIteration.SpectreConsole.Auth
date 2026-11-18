@@ -77,8 +77,12 @@ that is an `EXCEPTIONS.md` entry in the standards repo, not a local difference.
 ## Dependabot
 
 Minor and patch updates auto-merge behind CI. Major updates stay open for a human — that
-is deliberate, not a backlog to clear. Packages with per-TFM floors have major updates
-suppressed entirely via `ignore`; bump those by hand when a new .NET major lands.
+is deliberate, not a backlog to clear. Packages with per-TFM floors have all updates
+suppressed via `ignore`; bump those by hand when a new .NET major lands.
+
+The estate targets LTS .NET releases only. .NET 11 (STS) is skipped and the next target
+framework is .NET 12, so `dependabot.yml` ignores every `Microsoft.*` / `System.*` 11.x
+version. Do not propose or merge 11.x package or TFM upgrades.
 
 ## After opening a pull request
 
