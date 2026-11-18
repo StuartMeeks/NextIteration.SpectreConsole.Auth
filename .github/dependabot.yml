@@ -40,11 +40,20 @@ updates:
     # a security fix for these is suppressed too. Low risk (a CVE fix for a
     # floored line ships as a patch on that line, applied by hand), but worth
     # knowing.
+    #
+    # The last two entries are NOT repo-specific: STANDARD.md 4.13 requires them,
+    # identical, in every repo. .NET 11 is an STS release the estate skips (1.1;
+    # next target is .NET 12), so its 11.x packages are ignored by VERSION, not
+    # by name. 10.x servicing still flows; 12.x majors still arrive for review.
     # -------------------------------------------------------------------------
     ignore:
       - dependency-name: Microsoft.Extensions.DependencyInjection.Abstractions
       - dependency-name: Microsoft.Extensions.Http
       - dependency-name: System.Security.Cryptography.ProtectedData
+      - dependency-name: "Microsoft.*"
+        versions: ["11.*"]
+      - dependency-name: "System.*"
+        versions: ["11.*"]
     groups:
       nuget-minor-patch:
         patterns:
